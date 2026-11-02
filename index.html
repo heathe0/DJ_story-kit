@@ -1,0 +1,1503 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>스토리 기사 편집기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 고정 상단 막대 + 좌측 편집 열(블록 카드 스택) | 우측 실제 기사 미리보기 */
+:root{
+  --bg:#e9ecf0; --panel:#ffffff; --panel-2:#f4f6f8; --ink:#1a1f28; --muted:#5d6676; --line:#d6dbe2;
+  --accent:#2a52b5; --accent-soft:#e3e9f8; --accent-ink:#ffffff; --danger:#b42318; --ok:#1d7a4c; --warn:#9a6200;
+  --f-ui:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r:6px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#111419; --panel:#1a1e25; --panel-2:#21262e; --ink:#e5e8ed; --muted:#9aa3b3; --line:#30363f;
+    --accent:#86a6ff; --accent-soft:#232c45; --accent-ink:#0c1220; --danger:#ff8f86; --ok:#6fd3a0; --warn:#f2c066; color-scheme: dark; }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-ui);display:flex;flex-direction:column}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- top bar ---------- */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto;min-width:0}
+.brand b{font-size:16px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand small{font-family:var(--f-mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.save-state{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.save-state.is-warn{color:var(--warn)}
+.tb{display:flex;gap:6px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);
+  border-radius:var(--r);padding:6px 11px;font-size:13px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn--primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn--primary:hover{filter:brightness(1.07);border-color:var(--accent)}
+.btn--ghost{border-color:transparent;background:transparent}
+.btn--ghost:hover{background:var(--panel-2);border-color:transparent}
+.btn--sm{padding:3px 8px;font-size:12px}
+.btn--danger{color:var(--danger)}
+.btn svg{width:15px;height:15px;flex:none}
+
+/* ---------- workspace ---------- */
+.ws{display:grid;grid-template-columns:minmax(380px,460px) 1fr;flex:1;min-height:0}
+.pane-ed{overflow:auto;border-right:1px solid var(--line);padding:16px 16px 120px}
+.pane-pv{display:flex;flex-direction:column;min-width:0;background:var(--panel-2)}
+.pv-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.pv-bar .lbl{font-family:var(--f-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-right:auto}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;background:transparent;padding:4px 10px;font-size:12px}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.pv-stage{flex:1;overflow:auto;display:flex;justify-content:center;padding:0}
+.pv-stage.is-mobile{padding:18px 0}
+#pv{border:0;width:100%;height:100%;background:#fff;display:block}
+.pv-stage.is-mobile #pv{width:390px;max-width:100%;height:calc(100% - 4px);border-radius:18px;box-shadow:0 0 0 8px #0d0f13,0 10px 40px rgba(0,0,0,.25)}
+.mob-tabs{display:none}
+
+/* ---------- cards ---------- */
+.sec-label{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 2px 8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.card + .card{margin-top:0}
+.card.is-picked{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.card__head{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;min-height:42px}
+.card__toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border:0;background:transparent;text-align:left;padding:2px}
+.chev{width:14px;height:14px;flex:none;transition:transform .15s;color:var(--muted)}
+.card.is-open .chev{transform:rotate(90deg)}
+.tag{flex:none;font-size:11.5px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
+.tag[data-g="데이터"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.tag[data-g="인터랙티브"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.sum{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:13px}
+.tools{display:flex;gap:2px;flex:none}
+.ico{border:0;background:transparent;border-radius:4px;width:28px;height:28px;display:grid;place-items:center;color:var(--muted)}
+.ico:hover{background:var(--panel-2);color:var(--ink)}
+.ico.del:hover{color:var(--danger)}
+.ico svg{width:15px;height:15px}
+.card__body{display:none;padding:4px 12px 14px;border-top:1px solid var(--line)}
+.card.is-open .card__body{display:grid;gap:12px;padding-top:12px}
+
+/* ---------- fields ---------- */
+.f{display:grid;gap:5px;min-width:0}
+.f > label, .f > .lab{font-size:12.5px;font-weight:600}
+.f .hint{font-size:12px;color:var(--muted);line-height:1.5}
+.f .hint a{color:var(--accent)}
+input[type=text],input[type=url],input[type=number],input[type=date],select,textarea{
+  width:100%;border:1px solid var(--line);background:var(--panel);border-radius:5px;padding:7px 9px;font-size:13.5px;min-width:0}
+textarea{resize:vertical;line-height:1.6}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px}
+.status{font-size:12px;font-family:var(--f-mono);padding:5px 8px;border-radius:4px;background:var(--panel-2);overflow-wrap:anywhere}
+.status.ok{color:var(--ok)} .status.bad{color:var(--danger)}
+.mdbar{display:flex;gap:4px;flex-wrap:wrap}
+.mdbar button{border:1px solid var(--line);background:var(--panel-2);border-radius:4px;padding:1px 8px;font-size:12px}
+.mdbar button:hover{border-color:var(--muted)}
+.mdbar .mk{background:linear-gradient(transparent 55%,#ffe36e 55%)}
+.color-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.color-row input[type=color]{width:42px;height:32px;padding:0;border:1px solid var(--line);border-radius:5px;background:none}
+.swatch{width:24px;height:24px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
+.swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+
+.img-f{display:grid;gap:8px}
+.rng{display:flex;align-items:center;gap:10px}
+.rng input{flex:1;min-width:0;accent-color:var(--accent)}
+.rng-val{font-family:var(--f-mono);font-size:12px;min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.font-up{border:1.5px dashed var(--line);border-radius:6px;padding:10px;display:grid;gap:8px;background:var(--panel-2)}
+.font-sample{font-size:20px;line-height:1.4;overflow-wrap:anywhere}
+.font-up .meta{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.font-up .acts{display:flex;gap:6px;flex-wrap:wrap}
+.img-drop{border:1.5px dashed var(--line);border-radius:6px;padding:10px;display:flex;gap:10px;align-items:center;background:var(--panel-2)}
+.img-drop.is-over{border-color:var(--accent);background:var(--accent-soft)}
+.img-drop .thumb{width:84px;height:60px;border-radius:4px;object-fit:cover;background:var(--line);flex:none}
+.img-drop .ph{width:84px;height:60px;border-radius:4px;display:grid;place-items:center;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);flex:none;text-align:center}
+.img-drop .acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.img-drop .meta{font-family:var(--f-mono);font-size:11px;color:var(--muted);width:100%}
+
+.list{display:grid;gap:8px}
+.item{border:1px solid var(--line);border-radius:6px;padding:10px;display:grid;gap:10px;background:var(--panel-2)}
+.item__head{display:flex;align-items:center;gap:6px}
+.item__head b{font-size:12px;font-family:var(--f-mono);color:var(--muted);margin-right:auto}
+
+.adder{display:flex;justify-content:center;position:relative;height:22px;margin:2px 0}
+.adder::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px dashed transparent}
+.adder:hover::before{border-top-color:var(--line)}
+.adder button{position:relative;border:1px solid var(--line);background:var(--panel);border-radius:999px;width:22px;height:22px;display:grid;place-items:center;color:var(--muted);opacity:.0;transition:opacity .12s}
+.adder:hover button,.adder button:focus-visible,.adder.is-last button{opacity:1}
+.adder.is-last{height:auto;margin-top:10px}
+.adder.is-last button{width:100%;height:auto;border-radius:var(--r);padding:10px;border-style:dashed;font-weight:600;color:var(--accent);gap:6px;display:flex;justify-content:center}
+
+.palette{position:fixed;z-index:50;width:min(360px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:10px;display:grid;gap:10px;max-height:70vh;overflow:auto}
+.palette h4{margin:0 0 4px;font-size:11px;font-family:var(--f-mono);color:var(--muted);letter-spacing:.08em}
+.palette .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.palette button{text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:7px 9px;display:grid;gap:1px}
+.palette button:hover{border-color:var(--accent);background:var(--accent-soft)}
+.palette button b{font-size:13px}
+.palette button span{font-size:11.5px;color:var(--muted);line-height:1.35}
+
+/* ---------- modal ---------- */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(10,12,16,.5);display:grid;place-items:center;padding:16px}
+.modal__box{background:var(--panel);border-radius:10px;width:min(640px,100%);max-height:88vh;overflow:auto;padding:22px 24px;display:grid;gap:14px}
+.modal__box h2{margin:0;font-size:19px}
+.modal__box h3{margin:6px 0 0;font-size:14px}
+.modal__box p,.modal__box li{color:var(--ink);line-height:1.65;font-size:13.5px}
+.modal__box ol,.modal__box ul{margin:0;padding-left:20px;display:grid;gap:4px}
+.modal__box code{font-family:var(--f-mono);font-size:12px;background:var(--panel-2);padding:1px 5px;border-radius:3px}
+.modal__box .acts{display:flex;gap:8px;flex-wrap:wrap}
+.modal__box .note{font-size:12.5px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:9px 16px;border-radius:6px;font-size:13px;z-index:70;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+
+@media (max-width: 960px){
+  html,body{height:auto}
+  .ws{grid-template-columns:1fr;flex:none}
+  .mob-tabs{display:inline-flex}
+  .ws[data-view="edit"] .pane-pv{display:none}
+  .ws[data-view="preview"] .pane-ed{display:none}
+  .pane-ed{border-right:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .pane-pv{height:calc(100vh - 110px)}
+  .brand small{display:none}
+}
+@media (max-width:520px){ .row3{grid-template-columns:1fr 1fr} .tb .btn span{display:none} }
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><b>스토리 기사 편집기</b><small>Story Kit · 데이터 스토리텔링 실습</small></div>
+  <span class="save-state" id="saveState">불러오는 중…</span>
+  <div class="seg mob-tabs" role="group" aria-label="화면 전환">
+    <button id="tabEdit" aria-pressed="true">편집</button><button id="tabPv" aria-pressed="false">미리보기</button>
+  </div>
+  <div class="tb">
+    <button class="btn" id="bNew" title="빈 기사로 새로 시작"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg><span>새 기사</span></button>
+    <button class="btn" id="bSample" title="예시 기사 불러오기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span>예시 불러오기</span></button>
+    <button class="btn" id="bOpen" title="작업 파일(.json) 열기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 2h10v10H3z"/></svg><span>작업 파일 열기</span></button>
+    <button class="btn" id="bSave" title="작업 파일(.json)로 저장"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg><span>작업 파일 저장</span></button>
+    <button class="btn btn--primary" id="bPublish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg><span>발행하기</span></button>
+    <button class="btn btn--ghost" id="bHelp" title="도움말">도움말</button>
+  </div>
+  <input type="file" id="fileOpen" accept=".json,application/json" hidden>
+</header>
+
+<div class="ws" id="ws" data-view="edit">
+  <section class="pane-ed" id="editor" aria-label="편집"></section>
+  <section class="pane-pv" aria-label="미리보기">
+    <div class="pv-bar">
+      <span class="lbl">미리보기</span>
+      <div class="seg" role="group" aria-label="미리보기 크기">
+        <button id="pvDesk" aria-pressed="true">PC</button><button id="pvMob" aria-pressed="false">휴대폰</button>
+      </div>
+      <label class="chk" style="font-size:12px"><input type="checkbox" id="pvAuto" checked> 자동 새로고침</label>
+      <button class="btn btn--sm" id="pvRefresh">새로고침</button>
+    </div>
+    <div class="pv-stage" id="pvStage"><iframe id="pv" title="기사 미리보기"></iframe></div>
+  </section>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   0. 작은 도구들
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'html') el.innerHTML = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));
+  return el;
+}
+const ICON = {
+  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  dup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V4H4v12h4"/></svg>',
+  del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>'
+};
+function toast(msg, ms = 2400) { const t = h('div', { class: 'toast', role: 'status' }, msg); document.body.append(t); setTimeout(() => t.remove(), ms); }
+function download(name, text, type) {
+  const blob = new Blob([text], { type }); const a = h('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function slugify(s) { return (String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g, '-').slice(0, 40) || 'story'); }
+function fmtBytes(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.round(n / 1024) + 'KB'; }
+
+/* =====================================================================
+   1. 주소(임베드) 해석기 — 유튜브, Flourish, 구글 시트, 구글 어스, 기타
+   ===================================================================== */
+/*PARSERS-START*/
+function srcFromCode(u) { const m = String(u).match(/src\s*=\s*["']([^"']+)["']/i); return m ? m[1].replace(/&amp;/g, '&') : null; }
+function safeUrl(u) { u = String(u || '').trim(); return /^https?:\/\//i.test(u) ? u : ''; }
+
+function parseYouTube(u) {
+  u = String(u || '').trim(); if (!u) return null;
+  u = srcFromCode(u) || u;
+  let id = null;
+  const m = u.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (m) id = m[1]; else if (/^[A-Za-z0-9_-]{11}$/.test(u)) id = u;
+  if (!id) return { ok: false, msg: '유튜브 주소를 인식하지 못했어요. 영상 아래 [공유] 버튼에서 복사한 주소를 붙여넣으세요.' };
+  const short = /shorts\//.test(u);
+  let start = 0;
+  const t = u.match(/[?&#](?:t|start)=([0-9hms]+)/);
+  if (t) {
+    const v = t[1];
+    if (/^\d+$/.test(v)) start = +v;
+    else { const g = r => +((v.match(r) || [0, 0])[1]); start = g(/(\d+)h/) * 3600 + g(/(\d+)m/) * 60 + g(/(\d+)s/); }
+  }
+  const embed = `https://www.youtube.com/embed/${id}${start ? `?start=${start}` : ''}`;
+  return { ok: true, id, start, short, embed, msg: `인식됨 · 영상 ${id}${start ? ` · ${start}초부터 재생` : ''}${short ? ' · 쇼츠(세로 화면)' : ''}` };
+}
+
+function parseFlourish(u) {
+  u = String(u || '').trim(); if (!u) return null;
+  let m = u.match(/(visualisation|story)\/(\d+)/);
+  if (!m && /^\d+$/.test(u)) m = [0, 'visualisation', u];
+  if (!m) return { ok: false, msg: 'Flourish 주소를 인식하지 못했어요. [Export & publish]로 게시한 뒤 나오는 링크나 임베드 코드를 붙여넣으세요.' };
+  const kind = m[1], id = m[2];
+  const warn = /app\.flourish\.studio/.test(u) ? ' · 편집 화면 주소예요. 게시(Publish)를 했는지 확인하세요' : '';
+  return { ok: true, kind, id, embed: `https://flo.uri.sh/${kind}/${id}/embed`, msg: `인식됨 · ${kind === 'story' ? '스토리' : '시각화'} #${id}${warn}` };
+}
+
+function parseSheet(u) {
+  u = String(u || '').trim(); if (!u) return null;
+  u = srcFromCode(u) || u;
+  const gid = (u.match(/[#&?]gid=(\d+)/) || [])[1];
+  let m = u.match(/spreadsheets\/d\/e\/([A-Za-z0-9_-]+)/);
+  if (m) {
+    const base = `https://docs.google.com/spreadsheets/d/e/${m[1]}`;
+    const g = gid ? `gid=${gid}&single=true&` : '';
+    return { ok: true, pub: true, embed: `${base}/pubhtml?${g}widget=true&headers=false`, csv: `${base}/pub?${g}output=csv`, msg: '인식됨 · 웹에 게시된 시트' };
+  }
+  m = u.match(/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/);
+  if (m) {
+    const base = `https://docs.google.com/spreadsheets/d/${m[1]}`;
+    return { ok: true, pub: false, embed: `${base}/preview${gid ? `?gid=${gid}` : ''}`, csv: `${base}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ''}`,
+      msg: '인식됨 · 공유 링크 시트. 공유 설정이 [링크가 있는 모든 사용자 · 뷰어]여야 보여요. 가장 확실한 방법은 [파일 > 공유 > 웹에 게시] 주소예요' };
+  }
+  return { ok: false, msg: '구글 시트 주소를 인식하지 못했어요. 시트 주소창의 주소나 [웹에 게시] 링크를 붙여넣으세요.' };
+}
+
+function distToZoom(d, lat) { return clamp(Math.round(Math.log2(1.25e8 * Math.cos(lat * Math.PI / 180) / Math.max(d, 1))), 3, 20); }
+function parseEarth(u) {
+  u = String(u || '').trim(); if (!u) return null;
+  const src = srcFromCode(u);
+  if (src && /google\.[^/]+\/maps\/embed/.test(src)) return { ok: true, rawEmbed: src, msg: '인식됨 · 구글 지도 [지도 퍼가기] 코드' };
+  const ll = u.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (ll) return { ok: true, lat: +ll[1], lng: +ll[2], zoom: null, earth: null, msg: `인식됨 · 위도 ${(+ll[1]).toFixed(5)}, 경도 ${(+ll[2]).toFixed(5)}` };
+  const m = u.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,([^/?#]*))?/);
+  if (!m) return { ok: false, msg: '위치를 찾지 못했어요. 구글 어스의 공유 링크(주소에 @위도,경도가 들어 있음)나 "37.5665, 126.9780" 같은 좌표를 넣으세요.' };
+  const lat = +m[1], lng = +m[2];
+  let zoom = null, x;
+  for (const p of (m[3] || '').split(',')) {
+    if ((x = p.match(/^(\d+(?:\.\d+)?)z$/))) zoom = Math.round(+x[1]);
+    else if ((x = p.match(/^(\d+(?:\.\d+)?)[dm]$/))) zoom = distToZoom(+x[1], lat);
+  }
+  const isEarth = /earth\.google\.com/.test(u);
+  return { ok: true, lat, lng, zoom, earth: isEarth ? u : null, msg: `인식됨 · 위도 ${lat.toFixed(5)}, 경도 ${lng.toFixed(5)}${zoom ? ` · 확대 ${zoom}` : ''}${isEarth ? ' · 구글 어스 링크' : ''}` };
+}
+function earthLink(lat, lng, zoom) {
+  const d = Math.round(1.25e8 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom || 16));
+  return `https://earth.google.com/web/@${lat},${lng},0a,${d}d,35y,0h,45t,0r`;
+}
+function mapEmbed(b) {
+  const p = b._earth || {};
+  if (p.rawEmbed) return p.rawEmbed;
+  const lat = parseFloat(b.lat), lng = parseFloat(b.lng);
+  if (!isFinite(lat) || !isFinite(lng)) return '';
+  const z = clamp(parseInt(b.zoom) || 16, 1, 21), t = b.maptype === 'map' ? 'm' : (b.maptype === 'hybrid' ? 'h' : 'k');
+  const where = b.pin ? `q=${lat},${lng}${b.label ? `+(${encodeURIComponent(b.label)})` : ''}` : `ll=${lat},${lng}`;
+  return `https://maps.google.com/maps?${where}&t=${t}&z=${z}&hl=ko&output=embed`;
+}
+
+function parseEmbed(u) {
+  u = String(u || '').trim(); if (!u) return null;
+  const src = srcFromCode(u) || u;
+  if (!/^https:\/\//i.test(src)) return { ok: false, msg: '<iframe ...> 임베드 코드나 https:// 로 시작하는 주소를 넣으세요.' };
+  const hgt = (u.match(/height\s*=\s*["']?(\d{2,4})/i) || [])[1];
+  let host = ''; try { host = new URL(src).host; } catch (e) { return { ok: false, msg: '주소 형식이 올바르지 않아요.' }; }
+  return { ok: true, src, height: hgt ? +hgt : null, msg: `인식됨 · ${host}${hgt ? ` · 코드의 높이 ${hgt}px` : ''}` };
+}
+
+function parseTable(text) {
+  text = String(text || '').replace(/\r/g, '').replace(/\n+$/, '');
+  if (!text.trim()) return [];
+  if (text.includes('\t')) return text.split('\n').map(r => r.split('\t'));
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  row.push(cell); rows.push(row);
+  return rows;
+}
+const isNumCell = s => /^[-+]?[\d,]*\.?\d+\s*%?$/.test(String(s).trim());
+
+function mdInline(s) {
+  s = esc(s);
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/==(.+?)==/g, '<mark>$1</mark>');
+  s = s.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+  return s;
+}
+function md(src) {
+  const paras = String(src || '').replace(/\r/g, '').trim().split(/\n\s*\n/).filter(p => p.trim());
+  return paras.map(p => {
+    const lines = p.split('\n');
+    if (lines.every(l => /^\s*[-•]\s+/.test(l))) return '<ul>' + lines.map(l => `<li>${mdInline(l.replace(/^\s*[-•]\s+/, ''))}</li>`).join('') + '</ul>';
+    if (lines.every(l => /^\s*\d+[.)]\s+/.test(l))) return '<ol>' + lines.map(l => `<li>${mdInline(l.replace(/^\s*\d+[.)]\s+/, ''))}</li>`).join('') + '</ol>';
+    return '<p>' + lines.map(mdInline).join('<br>') + '</p>';
+  }).join('\n');
+}
+function linkify(s) {
+  return esc(s).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+}
+/*PARSERS-END*/
+
+/* =====================================================================
+   2. 블록 종류 정의
+   ===================================================================== */
+const WIDTHS = [['col', '본문 폭'], ['wide', '넓게'], ['full', '화면 가득']];
+const widthF = (def = 'col') => ({ k: 'width', t: 'select', label: '폭', options: WIDTHS, def });
+const heightF = (def = 520) => ({ k: 'height', t: 'number', label: 'PC 높이(px)', def, half: true });
+const mheightF = (def = 480) => ({ k: 'mheight', t: 'number', label: '휴대폰 높이(px)', def, half: true });
+
+const TYPES = {
+  heading: { name: '소제목', g: '글', desc: '이야기의 장을 나누는 큰 제목', fields: [
+    { k: 'eyebrow', label: '머리 표기 (선택)', t: 'text', ph: '예: 1부 · 소득', half: true },
+    { k: 'text', label: '소제목', t: 'text', ph: '소제목을 입력하세요' }] },
+  text: { name: '본문', g: '글', desc: '문단. 굵게·형광펜·링크 가능', fields: [
+    { k: 'text', label: '본문', t: 'md', rows: 8, ph: '빈 줄을 넣으면 문단이 나뉩니다.' }] },
+  quote: { name: '인용', g: '글', desc: '크게 강조하는 취재원 발언', fields: [
+    { k: 'text', label: '인용문', t: 'textarea', rows: 3 },
+    { k: 'source', label: '말한 사람', t: 'text', ph: '예: 김OO 서울시 교통정책과 주무관' }] },
+  callout: { name: '설명 상자', g: '글', desc: '분석 방법, 용어 풀이, 덧붙임', fields: [
+    { k: 'title', label: '상자 제목', t: 'text', ph: '예: 어떻게 분석했나' },
+    { k: 'text', label: '내용', t: 'md', rows: 5 },
+    { k: 'collapsed', label: '처음엔 접어 두고, 누르면 펼치기', t: 'check' }] },
+  divider: { name: '구분선', g: '글', desc: '장면 전환', fields: [
+    { k: 'style', label: '모양', t: 'select', options: [['line', '짧은 선'], ['dots', '점 세 개'], ['space', '여백만']] }] },
+
+  image: { name: '사진', g: '미디어', desc: '사진 한 장과 설명', fields: [
+    { k: 'src', label: '사진', t: 'image' },
+    { k: 'alt', label: '대체 텍스트', t: 'text', ph: '사진을 볼 수 없는 독자를 위한 설명', hint: '화면 낭독기가 읽어 주는 문장이에요. 사진에 무엇이 보이는지 한 문장으로.' },
+    { k: 'caption', label: '사진 설명', t: 'textarea', rows: 2 },
+    { k: 'credit', label: '사진 출처', t: 'text', ph: '예: 홍길동 기자', half: true }, widthF('wide')] },
+  gallery: { name: '사진 묶음', g: '미디어', desc: '사진 2~4장을 나란히', fields: [
+    { k: 'items', t: 'list', label: '사진', add: '사진 추가', max: 4, min: 1, item: () => ({ src: '', alt: '' }), fields: [
+      { k: 'src', label: '사진', t: 'image' }, { k: 'alt', label: '대체 텍스트', t: 'text' }] },
+    { k: 'caption', label: '사진 설명', t: 'textarea', rows: 2 },
+    { k: 'credit', label: '사진 출처', t: 'text', half: true }, widthF('wide')] },
+  youtube: { name: '유튜브', g: '미디어', desc: '영상 넣기', fields: [
+    { k: 'url', label: '유튜브 주소', t: 'url', parse: 'youtube', ph: 'https://youtu.be/…',
+      hint: '영상 아래 [공유] → [복사]. 특정 시점부터 틀려면 [시작 시간]을 체크하고 복사하세요. 내 컴퓨터에서 연 미리보기에서 "오류 153"이 보여도, 발행해서 웹에 올리면 정상 재생돼요.' },
+    { k: 'caption', label: '설명', t: 'textarea', rows: 2 },
+    { k: 'credit', label: '출처', t: 'text', half: true }, widthF('wide')] },
+
+  stats: { name: '숫자 강조', g: '데이터', desc: '큰 숫자가 올라가는 카운트업', fields: [
+    { k: 'items', t: 'list', label: '숫자', add: '숫자 추가', max: 4, min: 1, item: () => ({ prefix: '', value: '', unit: '', label: '' }), fields: [
+      { k: 'value', label: '숫자', t: 'text', ph: '예: 1,600', half: true, hint: '숫자만 쓰면 0부터 올라가는 효과가 붙어요.' },
+      { k: 'unit', label: '단위', t: 'text', ph: '예: 만 회', half: true },
+      { k: 'label', label: '설명', t: 'text', ph: '예: 분석한 영상의 총 조회수' }] },
+    { k: 'note', label: '각주 (선택)', t: 'text', ph: '예: 2024년 1~12월 기준' }] },
+  flourish: { name: 'Flourish 시각화', g: '데이터', desc: '차트·지도·스토리 임베드', fields: [
+    { k: 'url', label: 'Flourish 주소 또는 임베드 코드', t: 'url', parse: 'flourish', ph: 'https://public.flourish.studio/visualisation/…',
+      hint: 'Flourish에서 [Export & publish] → [Publish to share and embed] 후 나오는 링크를 붙여넣으세요. 임베드 코드를 통째로 넣어도 됩니다.' },
+    { k: 'title', label: '차트 제목 (선택)', t: 'text', hint: 'Flourish 안에 제목이 이미 있으면 비워 두세요.' },
+    heightF(600), mheightF(520),
+    { k: 'caption', label: '설명', t: 'textarea', rows: 2 },
+    { k: 'source', label: '데이터 출처', t: 'text', ph: '예: 통계청 가계금융복지조사', half: true }, widthF('wide')] },
+  sheet: { name: '구글 시트 표', g: '데이터', desc: '시트 데이터로 표 만들기', fields: [
+    { k: 'mode', label: '넣는 방식', t: 'select', rerender: true, options: [['table', '기사 스타일 표로 만들기 (추천)'], ['embed', '구글 시트 화면 그대로 넣기']] },
+    { k: 'url', label: '구글 시트 주소', t: 'url', parse: 'sheet', ph: 'https://docs.google.com/spreadsheets/d/…',
+      hint: '[파일 > 공유 > 웹에 게시]에서 나온 주소가 가장 확실해요.' },
+    { k: '_fetch', t: 'sheetfetch', show: b => b.mode !== 'embed' },
+    { k: 'data', label: '표 데이터', t: 'textarea', rows: 6, mono: true, show: b => b.mode !== 'embed',
+      hint: '시트에서 표 영역을 복사(Ctrl+C)해 그대로 붙여넣어도 됩니다. 첫 줄은 제목 줄이에요.' },
+    { k: 'title', label: '표 제목', t: 'text' },
+    { k: 'source', label: '데이터 출처', t: 'text', half: true },
+    { ...heightF(480), show: b => b.mode === 'embed' }, widthF('col')] },
+  earth: { name: '구글 어스 · 지도', g: '데이터', desc: '위성 지도와 3D 보기 단추', fields: [
+    { k: 'url', label: '구글 어스·구글 지도 주소, 또는 좌표', t: 'url', parse: 'earth', ph: 'https://earth.google.com/web/@37.5665,126.9780,…',
+      hint: '구글 어스 웹은 다른 사이트 안에 직접 넣을 수 없어요. 그래서 같은 위치의 위성 지도를 넣고, 아래에 [구글 어스에서 3D로 보기] 단추를 달아 줍니다.' },
+    { k: 'lat', label: '위도', t: 'text', third: true }, { k: 'lng', label: '경도', t: 'text', third: true },
+    { k: 'zoom', label: '확대(3~20)', t: 'number', def: 16, third: true },
+    { k: 'maptype', label: '지도 종류', t: 'select', half: true, options: [['sat', '위성'], ['hybrid', '위성 + 지명'], ['map', '일반 지도']] },
+    heightF(480),
+    { k: 'pin', label: '위치에 핀 꽂기', t: 'check' },
+    { k: 'label', label: '핀 이름 (선택)', t: 'text', show: b => b.pin },
+    { k: 'caption', label: '설명', t: 'textarea', rows: 2 }, widthF('wide')] },
+
+  scrolly: { name: '스크롤리텔링', g: '인터랙티브', desc: '그림은 고정, 글 카드가 지나가며 장면 전환', fields: [
+    { k: 'mode', label: '뒤에 고정할 그림', t: 'select', rerender: true, options: [['images', '사진·그래픽 (단계마다 바꾸기)'], ['flourish', 'Flourish 스토리 (단계마다 슬라이드 넘기기)']] },
+    { k: 'story', label: 'Flourish 스토리 주소', t: 'url', parse: 'flourish', show: b => b.mode === 'flourish',
+      hint: 'Flourish에서 [Story]를 만들어 게시한 주소. 단계마다 몇 번 슬라이드를 보여 줄지 아래에서 정합니다.' },
+    { k: 'fit', label: '그림 맞춤', t: 'select', half: true, show: b => b.mode !== 'flourish', options: [['cover', '화면 가득 채우기 (사진)'], ['contain', '잘리지 않게 (차트·지도)']] },
+    { k: 'align', label: '글 카드 위치', t: 'select', half: true, options: [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']] },
+    { k: 'steps', t: 'list', label: '단계', add: '단계 추가', min: 1, max: 20, item: () => ({ image: '', slide: '', text: '' }), fields: [
+      { k: 'image', label: '이 단계의 그림 (비우면 앞 그림 유지)', t: 'image', show: (b) => b.mode !== 'flourish' },
+      { k: 'slide', label: '보여 줄 슬라이드 번호', t: 'number', show: (b) => b.mode === 'flourish', ph: '1' },
+      { k: 'text', label: '글 카드', t: 'md', rows: 3 }] },
+    { k: 'credit', label: '그림 출처', t: 'text' }] },
+  embed: { name: '기타 임베드', g: '인터랙티브', desc: 'Datawrapper·지도·설문 등 iframe 코드', fields: [
+    { k: 'code', label: '임베드 코드 또는 주소', t: 'url', parse: 'embed', area: true,
+      hint: '<iframe …> 코드에서 주소(src)만 골라 씁니다. 자바스크립트가 들어간 코드는 실행되지 않아요.' },
+    heightF(500), mheightF(500),
+    { k: 'caption', label: '설명', t: 'textarea', rows: 2 },
+    { k: 'source', label: '출처', t: 'text', half: true }, widthF('col')] },
+};
+const GROUPS = ['글', '미디어', '데이터', '인터랙티브'];
+
+const ACCENTS = ['#2747d6', '#c4361e', '#0d7c66', '#7a3fd1', '#c27a00', '#1b1f27'];
+const BGS = ['#ffffff', '#f7f4ec', '#eef1f5', '#1d2433', '#121418', '#000000'];
+const FONTS = {
+  nanum_gothic: { name: '나눔고딕 (기본)', g: 'Nanum+Gothic:wght@400;700;800', stack: '"Nanum Gothic", "나눔고딕", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif' },
+  malgun: { name: '맑은 고딕', stack: '"Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif' },
+  noto_sans: { name: '본고딕 (Noto Sans KR)', g: 'Noto+Sans+KR:wght@400;500;700;900', stack: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif' },
+  nanum_myeongjo: { name: '나눔명조', g: 'Nanum+Myeongjo:wght@400;700;800', stack: '"Nanum Myeongjo", "AppleMyungjo", "Batang", serif' },
+  noto_serif: { name: '본명조 (Noto Serif KR)', g: 'Noto+Serif+KR:wght@400;600;700;900', stack: '"Noto Serif KR", "AppleMyungjo", "Batang", serif' },
+  gowun_batang: { name: '고운바탕', g: 'Gowun+Batang:wght@400;700', stack: '"Gowun Batang", "AppleMyungjo", "Batang", serif' },
+  custom: { name: '내가 올린 글꼴', g: 'Nanum+Gothic:wght@400;700;800', stack: '"StoryKitUser", "Nanum Gothic", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif' },
+};
+const FONT_OPTIONS = Object.entries(FONTS).map(([k, f]) => [k, f.name]);
+const FONT_EXT = { woff2: 'woff2', woff: 'woff', ttf: 'truetype', otf: 'opentype' };
+
+const META_FIELDS = [
+  { k: 'outlet', label: '매체 이름', t: 'text', ph: '예: 광운 데이터저널리즘랩', hint: '기사 맨 위 막대에 표시돼요.' },
+  { k: 'kicker', label: '머리말', t: 'text', ph: '예: 데이터로 본 서울 | 인터랙티브' },
+  { k: 'title', label: '기사 제목', t: 'textarea', rows: 2 },
+  { k: 'subtitle', label: '부제 · 리드', t: 'textarea', rows: 3 },
+  { k: 'heroStyle', label: '표지 형태', t: 'select', options: [['overlay', '사진 위에 제목 (풀스크린)'], ['split', '제목과 사진 나란히'], ['text', '글자 중심 (사진은 아래)']] },
+  { k: 'heroImage', label: '표지 사진', t: 'image', max: 2200 },
+  { k: 'heroCredit', label: '표지 사진 출처', t: 'text' },
+  { k: 'authors', label: '기자', t: 'textarea', rows: 3, ph: '홍길동 hong@example.com', hint: '한 줄에 한 명. 이름 뒤에 이메일을 쓰면 링크가 걸려요.' },
+  { k: 'team', label: '팀 이름 (선택)', t: 'text', half: true },
+  { k: 'date', label: '발행일', t: 'date', half: true },
+];
+const STYLE_FIELDS = [
+  { k: 'bg', label: '배경색', t: 'color', swatches: BGS, hint: '배경을 어둡게 하면 글자색은 자동으로 밝아집니다.' },
+  { k: 'accent', label: '강조색', t: 'color', swatches: ACCENTS, hint: '형광펜, 머리말, 숫자, 진행 막대 색이에요.' },
+  { k: 'headFont', label: '제목 글꼴', t: 'select', half: true, options: FONT_OPTIONS },
+  { k: 'bodyFont', label: '본문 글꼴', t: 'select', half: true, options: FONT_OPTIONS },
+  { k: 'fontData', label: '글꼴 파일 올리기', t: 'fontfile' },
+  { k: 'fontSize', label: '본문 글자 크기', t: 'range', min: 14, max: 24, step: 1, unit: 'px', def: 18, hint: '사진 설명·표·상자 글자도 같은 비율로 커지고 작아져요.' },
+  { k: 'headScale', label: '제목 크기', t: 'range', min: 70, max: 130, step: 5, unit: '%', def: 100, hint: '기사 제목, 소제목, 인용, 큰 숫자의 크기 비율이에요.' },
+];
+const END_FIELDS = [
+  { k: 'credits', label: '제작진', t: 'textarea', rows: 4, ph: '기획·취재: 홍길동\n데이터 분석: 김하늘', hint: '한 줄에 하나씩 "역할: 이름".' },
+  { k: 'sources', label: '자료 출처', t: 'textarea', rows: 3, ph: '통계청 가계동향조사 https://kosis.kr', hint: '한 줄에 하나. 주소를 쓰면 자동으로 링크가 걸려요.' },
+  { k: 'endnote', label: '맺음말 · 바로잡습니다 (선택)', t: 'textarea', rows: 2 },
+  { k: 'shareImage', label: '공유 미리보기 이미지 주소 (선택)', t: 'text', ph: 'https://…jpg', hint: '카카오톡·SNS로 링크를 보낼 때 뜨는 그림. 웹에 올라간 이미지 주소만 쓸 수 있어요.' },
+];
+function newBlock(type) {
+  const b = { id: uid(), type };
+  for (const f of TYPES[type].fields) {
+    if (f.t === 'list') b[f.k] = [f.item(), ...(type === 'scrolly' ? [f.item(), f.item()] : type === 'gallery' ? [f.item()] : [])];
+    else if (f.def !== undefined) b[f.k] = f.def;
+    else if (f.t === 'select') b[f.k] = f.options[0][0];
+    else if (f.t === 'check') b[f.k] = false;
+    else if (!f.k.startsWith('_')) b[f.k] = '';
+  }
+  return b;
+}
+function blankState() {
+  return {
+    v: 1,
+    meta: { outlet: '', kicker: '', title: '', subtitle: '', heroStyle: 'overlay', heroImage: '', heroCredit: '', authors: '', team: '', date: todayStr(),
+      accent: ACCENTS[0], bg: '#ffffff', headFont: 'nanum_gothic', bodyFont: 'nanum_gothic', fontSize: 18, headScale: 100, fontData: '', fontFile: '', fontFormat: '', credits: '', sources: '', endnote: '', shareImage: '' },
+    blocks: [newBlock('text')]
+  };
+}
+function sampleState() {
+  const s = blankState();
+  Object.assign(s.meta, {
+    outlet: '우리 학보 데이터팀', kicker: '예시 기사 · 데이터로 본 우리 동네',
+    title: '걸어서 10분, 우리 동네 버스 정류장은 얼마나 멀까',
+    subtitle: '편집기 사용법을 보여 주는 예시 기사입니다. 숫자와 동네 이름은 모두 연습용 가상 데이터예요. 블록을 고치고 지우면서 여러분의 기사로 바꿔 보세요.',
+    authors: '홍길동 hong@example.com\n김하늘 sky@example.com', team: '데이터저널리즘 실습 3조',
+    credits: '기획·취재: 홍길동, 김하늘\n데이터 분석: 김하늘\n디자인·개발: 홍길동',
+    sources: '서울 열린데이터광장 https://data.seoul.go.kr\n※ 이 예시의 수치는 모두 가상 데이터입니다.',
+  });
+  const B = (type, o) => Object.assign(newBlock(type), o);
+  s.blocks = [
+    B('text', { text: '아침 8시 10분, 가동 언덕길 꼭대기에 사는 대학생 이OO 씨는 정류장까지 ==14분==을 걷는다. 같은 구에 사는 친구는 3분이면 닿는다.\n\n본문은 이렇게 씁니다. **굵게**, ==형광펜==, [링크](https://example.com)를 쓸 수 있고, 빈 줄을 넣으면 문단이 나뉩니다.' }),
+    B('stats', { items: [
+      { prefix: '', value: '1,284', unit: '곳', label: '분석한 버스 정류장' },
+      { prefix: '', value: '312', unit: 'm', label: '집에서 가장 가까운 정류장까지 평균 거리' },
+      { prefix: '', value: '8.4', unit: '%', label: '도보 10분을 넘는 가구 비율' }], note: '※ 템플릿 예시용 가상 수치' }),
+    B('heading', { eyebrow: '1부 · 거리', text: '언덕 위 동네일수록 정류장이 멀다' }),
+    B('text', { text: '소제목 아래에 본문을 이어 씁니다. 숫자 강조 블록의 숫자는 독자가 그 위치까지 스크롤하면 0부터 올라갑니다.' }),
+    B('quote', { text: '비 오는 날엔 정류장까지 가는 길이 제일 힘들어요. 버스를 타기 전에 이미 지쳐 있죠.', source: '이OO(22) · 가동 주민 (예시)' }),
+    B('image', { alt: '', caption: '사진 블록입니다. [사진 올리기]로 내 컴퓨터의 사진을 넣으세요.', credit: '' }),
+    B('scrolly', { steps: [
+      { image: '', slide: '', text: '**스크롤리텔링** 블록입니다. 뒤의 그림은 화면에 고정되고, 이 글 카드만 위로 지나갑니다.' },
+      { image: '', slide: '', text: '단계마다 다른 그림을 올리면 카드가 지나갈 때 그림이 바뀝니다. 같은 차트에서 ==강조만 바뀐 그림 여러 장==을 준비하면 효과가 좋아요.' },
+      { image: '', slide: '', text: 'Flourish 스토리를 고르면 단계마다 슬라이드를 넘길 수도 있어요.' }] }),
+    B('heading', { eyebrow: '2부 · 데이터', text: '동네별로 비교해 보면' }),
+    B('flourish', { caption: 'Flourish 블록입니다. 게시한 차트 주소를 넣으세요.' }),
+    B('sheet', { title: '동네별 정류장 접근성 (가상 데이터)', source: '예시 데이터', data:
+      '동네\t정류장 수\t평균 도보 거리(m)\t10분 이내 가구 비율(%)\n가동\t24\t412\t86.2\n나동\t41\t268\t95.8\n다동\t33\t305\t92.1\n라동\t18\t488\t79.5\n마동\t52\t221\t98.0' }),
+    B('earth', { url: '37.6194, 127.0588', lat: '37.6194', lng: '127.0588', zoom: 16, pin: true, label: '예시 위치', caption: '구글 어스 · 지도 블록입니다. 구글 어스에서 복사한 링크를 넣으면 위치가 자동으로 잡혀요.' }),
+    B('youtube', { caption: '유튜브 블록입니다. 영상 공유 주소를 넣으세요.' }),
+    B('callout', { title: '어떻게 분석했나', collapsed: true, text: '설명 상자 블록입니다. 분석 방법, 데이터 출처, 용어 풀이처럼 본문 흐름을 끊지 않고 덧붙일 내용을 넣으세요.\n\n- 목록은 줄 앞에 "- "를 씁니다\n- 이렇게 여러 줄을 이어 쓰면 됩니다' }),
+  ];
+  return s;
+}
+
+/* =====================================================================
+   3. 상태 · 저장 (IndexedDB 자동 저장 + 작업 파일)
+   ===================================================================== */
+let state = null;
+const DB = {
+  db: null,
+  open() { return new Promise((res, rej) => { try { const r = indexedDB.open('story-kit', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(this.db = r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); },
+  async get(k) { if (!this.db) await this.open(); return new Promise((res, rej) => { const t = this.db.transaction('kv').objectStore('kv').get(k); t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error); }); },
+  async set(k, v) { if (!this.db) await this.open(); return new Promise((res, rej) => { const tx = this.db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+};
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const el = $('#saveState');
+    try {
+      await DB.set('current', JSON.stringify(state));
+      const d = new Date(); el.textContent = `자동 저장됨 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; el.classList.remove('is-warn');
+    } catch (e) { el.textContent = '자동 저장 실패 · 작업 파일로 저장하세요'; el.classList.add('is-warn'); }
+  }, 700);
+}
+function normalize(s) {
+  const base = blankState();
+  if (!s || typeof s !== 'object') return base;
+  const old = s.meta || {};
+  s.meta = Object.assign(base.meta, old);
+  if (!old.bg && old.theme === 'dark') s.meta.bg = '#121418';
+  if (!FONTS[s.meta.headFont]) s.meta.headFont = 'nanum_gothic';
+  if (!FONTS[s.meta.bodyFont]) s.meta.bodyFont = 'nanum_gothic';
+  s.blocks = (Array.isArray(s.blocks) ? s.blocks : []).filter(b => b && TYPES[b.type]).map(b => Object.assign(newBlock(b.type), b, { id: b.id || uid() }));
+  return s;
+}
+
+/* =====================================================================
+   4. 편집 화면 그리기
+   ===================================================================== */
+const openCards = new Set(['meta']);
+let pickedId = null;
+
+function renderEditor() {
+  const ed = $('#editor'); ed.innerHTML = '';
+  ed.append(h('div', { class: 'sec-label' }, '표지'));
+  ed.append(fixedCard('meta', '표지와 기사 정보', () => state.meta.title || '제목 없음', META_FIELDS, state.meta));
+  ed.append(h('div', { class: 'sec-label' }, '꾸미기'));
+  applyEditorFont(state.meta.fontData);
+  ed.append(fixedCard('style', '배경 · 글꼴 · 글자 크기', () => `${(FONTS[state.meta.bodyFont] || FONTS.nanum_gothic).name.replace(' (기본)', '')} · ${state.meta.fontSize || 18}px · 제목 ${state.meta.headScale || 100}%`, STYLE_FIELDS, state.meta));
+  ed.append(h('div', { class: 'sec-label' }, `본문 블록 · ${state.blocks.length}개`));
+  const list = h('div', { id: 'blocks' });
+  list.append(adder(0));
+  state.blocks.forEach((b, i) => { list.append(blockCard(b, i)); list.append(adder(i + 1, i === state.blocks.length - 1)); });
+  if (!state.blocks.length) list.firstChild.classList.add('is-last');
+  ed.append(list);
+  ed.append(h('div', { class: 'sec-label' }, '마무리'));
+  ed.append(fixedCard('end', '크레딧 · 출처', () => (state.meta.credits || '').split('\n')[0] || '제작진과 출처', END_FIELDS, state.meta));
+}
+
+function cardShell(id, tagText, group, summaryFn, tools) {
+  const card = h('article', { class: 'card' + (openCards.has(id) ? ' is-open' : '') + (pickedId === id ? ' is-picked' : ''), 'data-id': id });
+  const sum = h('span', { class: 'sum' }, summaryFn());
+  const toggle = h('button', { class: 'card__toggle', 'aria-expanded': openCards.has(id) ? 'true' : 'false' });
+  toggle.innerHTML = ICON.chev; toggle.append(h('span', { class: 'tag', 'data-g': group }, tagText), sum);
+  toggle.addEventListener('click', () => {
+    const open = !card.classList.contains('is-open');
+    card.classList.toggle('is-open', open); toggle.setAttribute('aria-expanded', open);
+    open ? openCards.add(id) : openCards.delete(id);
+    if (open) gotoPreview(id);
+  });
+  const head = h('header', { class: 'card__head' }, toggle);
+  if (tools) head.append(tools);
+  const body = h('div', { class: 'card__body' });
+  card.append(head, body);
+  card._sum = () => { sum.textContent = summaryFn(); };
+  card.addEventListener('focusin', () => gotoPreview(id));
+  return { card, body };
+}
+function fixedCard(id, label, summaryFn, fields, obj) {
+  const { card, body } = cardShell(id, label, '', summaryFn);
+  renderFields(body, fields, obj, obj, card);
+  return card;
+}
+function blockSummary(b) {
+  const pick = { heading: b.text, text: b.text, quote: b.text, callout: b.title, image: b.caption || (b.src ? '사진 있음' : '사진 없음'),
+    gallery: `${(b.items || []).filter(x => x.src).length}장`, youtube: b.url, stats: (b.items || []).map(x => x.value + (x.unit || '')).join(' · '),
+    flourish: b.title || b.url, sheet: b.title || b.url, earth: b.label || b.caption || (b.lat ? `${b.lat}, ${b.lng}` : ''), scrolly: `${(b.steps || []).length}단계`,
+    embed: b.caption || b.code, divider: { line: '짧은 선', dots: '점 세 개', space: '여백' }[b.style] }[b.type];
+  return String(pick || '').replace(/\s+/g, ' ').slice(0, 80) || '(비어 있음)';
+}
+function blockCard(b, i) {
+  const T = TYPES[b.type];
+  const tools = h('div', { class: 'tools' });
+  const mk = (ic, title, fn, cls = '') => { const x = h('button', { class: 'ico ' + cls, title, 'aria-label': title, onclick: fn }); x.innerHTML = ICON[ic]; return x; };
+  tools.append(
+    mk('up', '위로', () => moveBlock(i, -1)),
+    mk('down', '아래로', () => moveBlock(i, 1)),
+    mk('dup', '복제', () => { const c = JSON.parse(JSON.stringify(b)); c.id = uid(); state.blocks.splice(i + 1, 0, c); openCards.add(c.id); changed(true); }),
+    mk('del', '삭제', () => { if (confirm(`'${T.name}' 블록을 지울까요?`)) { state.blocks.splice(i, 1); changed(true); } }, 'del'));
+  const { card, body } = cardShell(b.id, T.name, T.g, () => blockSummary(b), tools);
+  renderFields(body, T.fields, b, b, card);
+  return card;
+}
+function moveBlock(i, d) { const j = i + d; if (j < 0 || j >= state.blocks.length) return; const [b] = state.blocks.splice(i, 1); state.blocks.splice(j, 0, b); changed(true); }
+
+function adder(idx, last) {
+  const btn = h('button', { 'aria-label': '블록 추가', title: '여기에 블록 추가' });
+  btn.innerHTML = ICON.plus; if (last) btn.append('블록 추가');
+  btn.addEventListener('click', e => openPalette(e.currentTarget, idx));
+  return h('div', { class: 'adder' + (last ? ' is-last' : '') }, btn);
+}
+function openPalette(anchor, idx) {
+  closePalette();
+  const pal = h('div', { class: 'palette', role: 'dialog', 'aria-label': '블록 고르기' });
+  for (const g of GROUPS) {
+    const grid = h('div', { class: 'grid' });
+    for (const [k, T] of Object.entries(TYPES)) if (T.g === g) grid.append(h('button', { onclick: () => { const b = newBlock(k); state.blocks.splice(idx, 0, b); openCards.add(b.id); closePalette(); changed(true); setTimeout(() => { const c = document.querySelector(`.card[data-id="${b.id}"]`); c && c.scrollIntoView({ block: 'center', behavior: 'smooth' }); gotoPreview(b.id); }, 50); } }, h('b', {}, T.name), h('span', {}, T.desc)));
+    pal.append(h('div', {}, h('h4', {}, g), grid));
+  }
+  document.body.append(pal);
+  const r = anchor.getBoundingClientRect(), pw = pal.offsetWidth, ph = pal.offsetHeight;
+  pal.style.left = clamp(r.left + r.width / 2 - pw / 2, 16, innerWidth - pw - 16) + 'px';
+  pal.style.top = (r.bottom + ph + 8 < innerHeight ? r.bottom + 6 : Math.max(16, r.top - ph - 6)) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', outside), 0);
+  function outside(e) { if (!pal.contains(e.target)) closePalette(); }
+  pal._off = () => document.removeEventListener('mousedown', outside);
+  pal.querySelector('button').focus();
+}
+function closePalette() { const p = $('.palette'); if (p) { p._off && p._off(); p.remove(); } }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePalette(); const m = $('.modal'); m && m.remove(); } });
+
+/* ---------- 필드 ---------- */
+function renderFields(container, fields, obj, block, card) {
+  container.innerHTML = '';
+  let rowBuf = null, rowKind = null;
+  const flush = () => { if (rowBuf) { container.append(rowBuf); rowBuf = null; rowKind = null; } };
+  for (const f of fields) {
+    if (f.show && !f.show(block)) continue;
+    const el = renderField(f, obj, block, card, container, fields);
+    const kind = f.half ? 'row2' : f.third ? 'row3' : null;
+    if (kind) {
+      if (!rowBuf || rowKind !== kind || rowBuf.children.length >= (kind === 'row2' ? 2 : 3)) { flush(); rowBuf = h('div', { class: kind }); rowKind = kind; }
+      rowBuf.append(el);
+    } else { flush(); container.append(el); }
+  }
+  flush();
+}
+function fid() { return 'f' + uid(); }
+function renderField(f, obj, block, card, container, fields) {
+  const id = fid();
+  const wrap = h('div', { class: 'f' });
+  const label = f.label ? h('label', { for: id }, f.label) : null;
+  const hint = f.hint ? h('div', { class: 'hint' }, f.hint) : null;
+  const set = (v, rerender) => {
+    obj[f.k] = v; card && card._sum && card._sum();
+    if (rerender || f.rerender) renderFields(container, fields, obj, block, card);
+    changed(false);
+  };
+  let input;
+  switch (f.t) {
+    case 'text': case 'date':
+      input = h('input', { id, type: f.t, value: obj[f.k] ?? '', placeholder: f.ph || '' });
+      input.addEventListener('input', () => set(input.value)); break;
+    case 'number':
+      input = h('input', { id, type: 'number', value: obj[f.k] ?? '', placeholder: f.ph || '', inputmode: 'numeric' });
+      input.addEventListener('input', () => set(input.value === '' ? '' : +input.value)); break;
+    case 'textarea': case 'md': {
+      input = h('textarea', { id, rows: f.rows || 3, placeholder: f.ph || '' }); input.value = obj[f.k] ?? '';
+      if (f.mono) input.style.fontFamily = 'var(--f-mono)', input.style.fontSize = '12.5px', input.style.whiteSpace = 'pre', input.style.overflowX = 'auto';
+      input.addEventListener('input', () => set(input.value));
+      if (f.t === 'md') {
+        const bar = h('div', { class: 'mdbar' });
+        const wrapSel = (a, b, ph) => {
+          const s = input.selectionStart, e = input.selectionEnd, v = input.value, sel = v.slice(s, e) || ph;
+          input.value = v.slice(0, s) + a + sel + b + v.slice(e); input.focus();
+          input.setSelectionRange(s + a.length, s + a.length + sel.length); set(input.value);
+        };
+        bar.append(
+          h('button', { type: 'button', onclick: () => wrapSel('**', '**', '굵은 글씨'), title: '굵게' }, h('b', {}, '굵게')),
+          h('button', { type: 'button', class: 'mk', onclick: () => wrapSel('==', '==', '강조할 말'), title: '형광펜' }, '형광펜'),
+          h('button', { type: 'button', onclick: () => wrapSel('*', '*', '기울임'), title: '기울임' }, h('i', {}, '기울임')),
+          h('button', { type: 'button', onclick: () => { const u = prompt('연결할 주소 (https://…)', 'https://'); if (u && /^https?:\/\//.test(u)) wrapSel('[', `](${u})`, '링크 글자'); }, title: '링크' }, '링크'));
+        wrap.append(label || '', bar, input, hint || ''); return wrap;
+      }
+      break;
+    }
+    case 'select':
+      input = h('select', { id }); for (const [v, t] of f.options) input.append(h('option', { value: v, selected: obj[f.k] === v }, t));
+      input.addEventListener('change', () => set(input.value)); break;
+    case 'check': {
+      input = h('input', { id, type: 'checkbox', checked: !!obj[f.k] });
+      input.addEventListener('change', () => set(input.checked, true));
+      wrap.append(h('label', { class: 'chk', for: id }, input, f.label)); if (hint) wrap.append(hint); return wrap;
+    }
+    case 'color': {
+      const row = h('div', { class: 'color-row' });
+      const SW = f.swatches || ACCENTS;
+      input = h('input', { id, type: 'color', value: obj[f.k] || SW[0] });
+      const sws = SW.map(c => { const s = h('button', { type: 'button', class: 'swatch', style: `background:${c}`, 'aria-label': c, 'aria-pressed': String(obj[f.k] === c) }); s.addEventListener('click', () => { input.value = c; upd(c); }); return s; });
+      const upd = v => { sws.forEach(s => s.setAttribute('aria-pressed', String(s.getAttribute('aria-label') === v))); set(v); };
+      input.addEventListener('input', () => upd(input.value));
+      row.append(input, ...sws); wrap.append(label, row, hint || ''); return wrap;
+    }
+    case 'range': {
+      const val = obj[f.k] ?? f.def;
+      const out = h('output', { for: id, class: 'rng-val' }, `${val}${f.unit}`);
+      input = h('input', { id, type: 'range', min: f.min, max: f.max, step: f.step, value: val });
+      input.addEventListener('input', () => { out.textContent = input.value + f.unit; set(+input.value); });
+      const reset = h('button', { type: 'button', class: 'btn btn--sm btn--ghost', onclick: () => { input.value = f.def; out.textContent = f.def + f.unit; set(f.def); } }, '기본값');
+      wrap.append(label, h('div', { class: 'rng' }, input, out, reset), hint || ''); return wrap;
+    }
+    case 'fontfile': return fontFileField(f, obj, block, card, container, fields);
+    case 'image': return imageField(f, obj, block, card, set, label, hint);
+    case 'url': return urlField(f, obj, block, card, container, fields, set, label, hint, id);
+    case 'list': return listField(f, obj, block, card);
+    case 'sheetfetch': return sheetFetchField(obj, block, card, container, fields);
+  }
+  wrap.append(label || '', input, hint || '');
+  return wrap;
+}
+
+const PARSERS = { youtube: parseYouTube, flourish: parseFlourish, sheet: parseSheet, earth: parseEarth, embed: parseEmbed };
+function urlField(f, obj, block, card, container, fields, set, label, hint, id) {
+  const wrap = h('div', { class: 'f' });
+  const input = f.area ? h('textarea', { id, rows: 3, placeholder: f.ph || '' }) : h('input', { id, type: 'url', placeholder: f.ph || '' });
+  input.value = obj[f.k] || '';
+  const st = h('div', { class: 'status', hidden: true });
+  const show = () => {
+    const p = PARSERS[f.parse](input.value);
+    if (!p) { st.hidden = true; return p; }
+    st.hidden = false; st.className = 'status ' + (p.ok ? 'ok' : 'bad'); st.textContent = (p.ok ? '✓ ' : '✕ ') + p.msg; return p;
+  };
+  show();
+  input.addEventListener('input', () => {
+    const p = show();
+    if (f.parse === 'earth' && p && p.ok) {
+      obj._earth = p.rawEmbed ? { rawEmbed: p.rawEmbed } : null;
+      if (p.lat != null) { obj.lat = String(p.lat); obj.lng = String(p.lng); if (p.zoom) obj.zoom = p.zoom; obj.earthUrl = p.earth || ''; }
+      obj[f.k] = input.value; renderFields(container, fields, obj, block, card);
+      const again = container.querySelector('input[type=url]'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      changed(false); return;
+    }
+    if (f.parse === 'embed' && p && p.ok && p.height && obj.height === TYPES.embed.fields.find(x => x.k === 'height').def) obj.height = p.height;
+    set(input.value);
+  });
+  wrap.append(label, input, st, hint || '');
+  return wrap;
+}
+
+function applyEditorFont(data) {
+  let st = document.getElementById('userFontStyle');
+  if (!st) { st = h('style', { id: 'userFontStyle' }); document.head.append(st); }
+  if (st._v === data) return; st._v = data;
+  st.textContent = data ? `@font-face{font-family:"StoryKitUser";src:url("${data}");font-display:swap}` : '';
+}
+function fontFileField(f, obj, block, card, container, fields) {
+  const wrap = h('div', { class: 'f' });
+  const fileIn = h('input', { type: 'file', accept: '.woff2,.woff,.ttf,.otf', hidden: true });
+  const box = h('div', { class: 'font-up' });
+  const rerender = () => { renderFields(container, fields, obj, block, card); card && card._sum && card._sum(); changed(false); };
+  const draw = () => {
+    box.innerHTML = '';
+    if (obj.fontData) box.append(h('div', { class: 'font-sample', style: 'font-family:"StoryKitUser",sans-serif' }, '가나다라마바사 Data Journalism 2026'),
+      h('div', { class: 'meta' }, `${obj.fontFile || '올린 글꼴'} · ${fmtBytes(obj.fontData.length * 0.75)}`));
+    else box.append(h('div', { class: 'hint' }, 'woff2·woff·ttf·otf 파일을 올리면 [내가 올린 글꼴]로 쓸 수 있어요.'));
+    const acts = h('div', { class: 'acts' }, h('button', { type: 'button', class: 'btn btn--sm', onclick: () => fileIn.click() }, obj.fontData ? '다른 글꼴로 바꾸기' : '글꼴 파일 올리기'));
+    if (obj.fontData) acts.append(h('button', { type: 'button', class: 'btn btn--sm btn--ghost btn--danger', onclick: () => {
+      obj.fontData = ''; obj.fontFile = ''; obj.fontFormat = '';
+      if (obj.headFont === 'custom') obj.headFont = 'nanum_gothic';
+      if (obj.bodyFont === 'custom') obj.bodyFont = 'nanum_gothic';
+      applyEditorFont(''); rerender(); toast('올린 글꼴을 지우고 나눔고딕으로 돌렸어요.');
+    } }, '지우기'));
+    box.append(acts);
+  };
+  fileIn.addEventListener('change', async () => {
+    const file = fileIn.files[0]; fileIn.value = ''; if (!file) return;
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!FONT_EXT[ext]) return toast('woff2, woff, ttf, otf 파일만 올릴 수 있어요.');
+    if (file.size > 12e6) return toast(`글꼴 파일이 너무 커요(${fmtBytes(file.size)}). 12MB 이하, 가능하면 woff2 파일을 쓰세요.`, 3600);
+    try {
+      await new FontFace('StoryKitCheck', await file.arrayBuffer()).load();
+      const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+      obj.fontData = data; obj.fontFile = file.name; obj.fontFormat = FONT_EXT[ext];
+      obj.headFont = 'custom'; obj.bodyFont = 'custom';
+      applyEditorFont(data); rerender();
+      toast(file.size > 4e6 ? `글꼴을 적용했어요. 파일이 커서(${fmtBytes(file.size)}) 기사가 느리게 열릴 수 있어요.` : '글꼴을 제목과 본문에 적용했어요. 위 칸에서 따로 바꿀 수 있어요.', 3600);
+    } catch (e) { toast('글꼴 파일을 읽지 못했어요. 손상되지 않은 woff2·ttf·otf 파일인지 확인하세요.', 3600); }
+  });
+  draw();
+  wrap.append(h('span', { class: 'lab' }, f.label), box, fileIn,
+    h('div', { class: 'hint' }, '웹 게시(임베딩)가 허용된 글꼴만 쓰세요. 한글 글꼴은 용량이 커서 기사 파일이 무거워질 수 있어요.'));
+  return wrap;
+}
+async function compressImage(file, max = 1800) {
+  if (/gif|svg/.test(file.type)) return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    let w = img.naturalWidth, hh = img.naturalHeight; const s = Math.min(1, max / Math.max(w, hh)); w = Math.round(w * s); hh = Math.round(hh * s);
+    const c = document.createElement('canvas'); c.width = w; c.height = hh; c.getContext('2d').drawImage(img, 0, 0, w, hh);
+    if (file.type === 'image/png') { const d = c.toDataURL('image/webp', 0.88); return d.startsWith('data:image/webp') ? d : c.toDataURL('image/png'); }
+    return c.toDataURL('image/jpeg', 0.84);
+  } finally { URL.revokeObjectURL(url); }
+}
+function imageField(f, obj, block, card, set, label, hint) {
+  const wrap = h('div', { class: 'f img-f' });
+  const fileIn = h('input', { type: 'file', accept: 'image/*', hidden: true });
+  const drop = h('div', { class: 'img-drop' });
+  const draw = () => {
+    drop.innerHTML = '';
+    const v = obj[f.k];
+    drop.append(v ? h('img', { class: 'thumb', src: v, alt: '' }) : h('div', { class: 'ph' }, '사진을 여기로 끌어 놓기'));
+    const acts = h('div', { class: 'acts' });
+    acts.append(h('button', { type: 'button', class: 'btn btn--sm', onclick: () => fileIn.click() }, v ? '바꾸기' : '사진 올리기'));
+    acts.append(h('button', { type: 'button', class: 'btn btn--sm btn--ghost', onclick: () => { urlIn.hidden = !urlIn.hidden; if (!urlIn.hidden) urlIn.focus(); } }, '주소로 넣기'));
+    if (v) acts.append(h('button', { type: 'button', class: 'btn btn--sm btn--ghost btn--danger', onclick: () => { set(''); draw(); } }, '지우기'));
+    if (v) acts.append(h('span', { class: 'meta' }, v.startsWith('data:') ? `파일에 포함 · ${fmtBytes(v.length * 0.75)}` : '웹 주소 사진'));
+    drop.append(acts);
+  };
+  const urlIn = h('input', { type: 'url', placeholder: 'https://… 로 시작하는 사진 주소', hidden: true });
+  urlIn.addEventListener('change', () => { if (safeUrl(urlIn.value)) { set(urlIn.value.trim()); draw(); urlIn.hidden = true; } else toast('https:// 로 시작하는 주소를 넣어 주세요.'); });
+  const take = async file => {
+    if (!file || !file.type.startsWith('image/')) return toast('사진 파일만 올릴 수 있어요.');
+    if (/gif/.test(file.type) && file.size > 4e6) toast('GIF가 커서 기사 파일이 무거워질 수 있어요.');
+    try { set(await compressImage(file, f.max || 1800)); draw(); } catch (e) { toast('사진을 읽지 못했어요. 다른 형식(JPG, PNG)으로 시도해 보세요.'); }
+  };
+  fileIn.addEventListener('change', () => { take(fileIn.files[0]); fileIn.value = ''; });
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('is-over'); take(e.dataTransfer.files[0]); });
+  draw();
+  wrap.append(h('span', { class: 'lab' }, f.label), drop, urlIn, fileIn, hint || '');
+  return wrap;
+}
+function listField(f, obj, block, card) {
+  const wrap = h('div', { class: 'f' });
+  const list = h('div', { class: 'list' });
+  const arr = obj[f.k] = obj[f.k] || [];
+  const draw = () => {
+    list.innerHTML = '';
+    arr.forEach((it, i) => {
+      const item = h('div', { class: 'item' });
+      const mk = (ic, title, fn) => { const x = h('button', { type: 'button', class: 'ico', title, 'aria-label': title, onclick: fn }); x.innerHTML = ICON[ic]; return x; };
+      const head = h('div', { class: 'item__head' }, h('b', {}, `${f.label} ${i + 1}`),
+        mk('up', '위로', () => { if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; draw(); changed(false); } }),
+        mk('down', '아래로', () => { if (i < arr.length - 1) { [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]]; draw(); changed(false); } }));
+      if (arr.length > (f.min || 0)) { const d = mk('del', '삭제', () => { arr.splice(i, 1); draw(); changed(false); }); d.classList.add('del'); head.append(d); }
+      const body = h('div', { style: 'display:grid;gap:10px' });
+      renderFields(body, f.fields, it, block, card);
+      item.append(head, body); list.append(item);
+    });
+    addBtn.hidden = arr.length >= (f.max || 99);
+  };
+  const addBtn = h('button', { type: 'button', class: 'btn btn--sm', onclick: () => { arr.push(f.item()); draw(); changed(false); } }, '+ ' + f.add);
+  draw();
+  wrap.append(list, addBtn);
+  return wrap;
+}
+function sheetFetchField(obj, block, card, container, fields) {
+  const st = h('div', { class: 'hint' });
+  const btn = h('button', { type: 'button', class: 'btn btn--sm', onclick: async () => {
+    const p = parseSheet(obj.url);
+    if (!p || !p.ok) { st.textContent = '먼저 위에 구글 시트 주소를 넣어 주세요.'; return; }
+    st.textContent = '시트에서 데이터를 가져오는 중…';
+    try {
+      const r = await fetch(p.csv); if (!r.ok) throw new Error(r.status);
+      const txt = await r.text();
+      if (/^\s*</.test(txt)) throw new Error('html');
+      const rows = parseTable(txt);
+      obj.data = rows.map(r => r.join('\t')).join('\n');
+      renderFields(container, fields, obj, block, card); changed(false);
+      toast(`표 ${rows.length}줄을 가져왔어요.`);
+    } catch (e) {
+      st.textContent = '가져오지 못했어요. 시트를 [웹에 게시]했는지, 공유가 [링크가 있는 모든 사용자]인지 확인하세요. 안 되면 시트에서 표를 복사해 아래 칸에 붙여넣으면 됩니다.';
+    }
+  } }, '시트에서 데이터 가져오기');
+  return h('div', { class: 'f' }, h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, btn), st);
+}
+
+/* =====================================================================
+   5. 기사 HTML 만들기 (미리보기·발행 공용)
+   ===================================================================== */
+function contrastInk(hex) {
+  const m = String(hex).replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i); if (!m) return '#fff';
+  const [r, g, b] = m.slice(1).map(x => { const c = parseInt(x, 16) / 255; return c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); });
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.36 ? '#111318' : '#ffffff';
+}
+function lum(hex) {
+  const m = String(hex).replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i); if (!m) return 1;
+  const [r, g, b] = m.slice(1).map(x => { const c = parseInt(x, 16) / 255; return c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const isDarkBg = hex => lum(hex) < 0.3;
+const validHex = (v, d) => /^#[0-9a-f]{6}$/i.test(v || '') ? v : d;
+function fontLink(meta) {
+  const fams = new Set(['IBM+Plex+Mono:wght@500']);
+  for (const k of [meta.headFont, meta.bodyFont]) { const f = FONTS[k]; if (f && f.g) fams.add(f.g); }
+  return 'https://fonts.googleapis.com/css2?' + [...fams].map(x => 'family=' + x).join('&') + '&display=swap';
+}
+function fmtDate(s) { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[1]}.${m[2]}.${m[3]}` : esc(s); }
+function parseAuthors(s) {
+  return String(s || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/\S+@\S+/); return { name: (m ? l.replace(m[0], '') : l).trim().replace(/[,·|]+$/, '').trim(), email: m ? m[0] : '' };
+  });
+}
+
+function articleCSS(meta) {
+  const acc = validHex(meta.accent, ACCENTS[0]), bg = validHex(meta.bg, '#ffffff'), dark = isDarkBg(bg);
+  const hf = FONTS[meta.headFont] || FONTS.nanum_gothic, bf = FONTS[meta.bodyFont] || FONTS.nanum_gothic;
+  const fs = clamp(+meta.fontSize || 18, 12, 30), hs = clamp(+meta.headScale || 100, 50, 160) / 100;
+  const useCustom = meta.fontData && (meta.headFont === 'custom' || meta.bodyFont === 'custom');
+  const face = useCustom ? `@font-face{font-family:"StoryKitUser";src:url("${meta.fontData}")${meta.fontFormat ? ` format("${meta.fontFormat}")` : ''};font-display:swap}` : '';
+  return `${face}
+:root{--accent:${acc};--accent-ink:${contrastInk(acc)};--bg:${bg};
+  --ink:${dark ? '#eceef1' : '#16181d'};--ink-2:${dark ? '#c6cbd4' : '#3b4150'};--muted:${dark ? '#9ea5b2' : '#646b7a'};
+  --rule:color-mix(in srgb,var(--ink) 14%,var(--bg));--soft:color-mix(in srgb,var(--ink) 5%,var(--bg));--card:var(--bg);--fig:color-mix(in srgb,var(--ink) 7%,var(--bg));
+  --hl:color-mix(in srgb,var(--accent) ${dark ? 45 : 30}%,transparent);--f-head:${hf.stack};--f-body:${bf.stack};--f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --fs:${fs}px;--hs:${hs};--col:680px;--wide:1080px;--gut:max(20px,env(safe-area-inset-left,0px));color-scheme:${dark ? 'dark' : 'light'}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:var(--fs);line-height:1.9;word-break:keep-all;overflow-wrap:break-word}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
+mark{background:linear-gradient(transparent 55%,var(--hl) 55%);color:inherit;padding:0 1px}
+.progress{position:fixed;inset:0 0 auto;height:3px;z-index:30;pointer-events:none}
+.progress span{display:block;height:100%;background:var(--accent);transform-origin:0 50%;transform:scaleX(0)}
+.topbar{position:absolute;inset:0 0 auto;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:14px var(--gut);font:700 13px/1 var(--f-body);letter-spacing:.01em;color:var(--ink)}
+.topbar.on-dark{color:#fff}
+.topbar button{font:inherit;color:inherit;background:transparent;border:1px solid currentColor;border-radius:999px;padding:6px 12px;cursor:pointer;opacity:.85}
+.topbar button:hover{opacity:1}
+/* hero */
+.hero{position:relative}
+.hero__kicker{font:700 14px/1.4 var(--f-body);letter-spacing:.01em;color:var(--accent);margin:0 0 18px}
+.hero__title{font-family:var(--f-head);font-weight:800;font-size:calc(clamp(34px,6.2vw,72px) * var(--hs));line-height:1.18;letter-spacing:-.02em;margin:0;text-wrap:balance}
+.hero__sub{font-size:calc(var(--fs) * 1.15);line-height:1.7;margin:22px 0 0;max-width:640px;color:var(--ink-2);text-wrap:pretty}
+.hero__credit{font:12px/1.4 var(--f-mono);opacity:.75}
+.hero--overlay{min-height:min(94vh,980px);display:flex;align-items:flex-end;color:#fff;background:#14161b}
+.hero--overlay .hero__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero--overlay::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,.25) 55%,rgba(0,0,0,.82) 100%)}
+.hero--overlay.no-img::after{background:radial-gradient(ellipse at 80% 10%,color-mix(in srgb,var(--accent) 45%,transparent),transparent 60%)}
+.hero--overlay .hero__in{position:relative;z-index:2;width:100%;max-width:var(--wide);margin:0 auto;padding:120px var(--gut) clamp(48px,8vh,96px)}
+.hero--overlay .hero__sub{color:rgba(255,255,255,.9)}
+.hero--overlay .hero__kicker{color:#fff;opacity:.9}
+.hero--overlay .hero__kicker::before{content:"";display:inline-block;width:28px;height:3px;background:var(--accent);vertical-align:middle;margin-right:10px}
+.hero--overlay .hero__credit{position:absolute;z-index:2;right:var(--gut);bottom:14px;color:#fff}
+.hero--split{display:grid;grid-template-columns:1fr 1fr;min-height:min(86vh,860px)}
+.hero--split .hero__in{display:flex;flex-direction:column;justify-content:center;padding:110px clamp(24px,5vw,72px) 64px var(--gut)}
+.hero--split .hero__media{position:relative;background:var(--fig)}
+.hero--split .hero__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero--split .hero__credit{position:absolute;right:12px;bottom:10px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.hero--text .hero__in{max-width:var(--wide);margin:0 auto;padding:130px var(--gut) 40px}
+.hero--text .hero__title{font-size:calc(clamp(38px,7.4vw,92px) * var(--hs))}
+.hero--text .hero__media{max-width:var(--wide);margin:12px auto 0;padding:0 var(--gut)}
+.hero--text .hero__media img{width:100%}
+.hero--text .hero__credit{display:block;text-align:right;margin-top:6px;color:var(--muted)}
+.byline{max-width:var(--col);margin:44px auto 0;padding:0 var(--gut);display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;font-size:14px;color:var(--muted);line-height:1.6;border-bottom:1px solid var(--rule);padding-bottom:22px;box-sizing:content-box}
+.byline .team{color:var(--ink);font-weight:700}
+.byline .by a{font-family:var(--f-mono);font-size:12px;color:var(--muted);text-decoration:none;margin-left:4px}
+.byline .by a:hover{color:var(--accent)}
+.byline time{margin-left:auto;font-family:var(--f-mono);font-size:12.5px}
+/* body */
+main{padding:24px 0 40px}
+.blk{margin:0 auto;padding:0 var(--gut);box-sizing:content-box}
+.blk + .blk{margin-top:34px}
+.w-col{max-width:var(--col)} .w-wide{max-width:var(--wide)} .w-full{max-width:none;padding:0}
+.w-full figcaption{padding:0 var(--gut);max-width:var(--wide);margin-left:auto;margin-right:auto}
+.prose p{margin:0 0 1.15em}.prose p:last-child{margin-bottom:0}
+.prose ul,.prose ol{margin:0 0 1.15em;padding-left:1.3em}
+.prose li{margin:.25em 0}
+.sec{font-family:var(--f-head);font-weight:800;font-size:calc(clamp(26px,3.4vw,36px) * var(--hs));line-height:1.35;letter-spacing:-.015em;margin:80px 0 4px;text-wrap:balance}
+.blk--heading{margin-top:84px!important}
+.sec .eyebrow{display:block;font:700 14px/1.4 var(--f-body);letter-spacing:.01em;color:var(--accent);margin-bottom:12px}
+.pull{margin:24px 0;padding:6px 0 6px 0;border:0;text-align:left}
+.pull p{font-family:var(--f-head);font-weight:700;font-size:calc(clamp(23px,2.8vw,30px) * var(--hs));line-height:1.6;margin:0;text-wrap:pretty}
+.pull p::before{content:"“";display:block;font-size:64px;line-height:.8;color:var(--accent);margin-bottom:6px}
+.pull cite{display:block;margin-top:14px;font-style:normal;font-size:14px;color:var(--muted)}
+.pull cite::before{content:"";display:inline-block;width:20px;height:1px;background:currentColor;vertical-align:middle;margin-right:8px}
+.box{background:var(--soft);border-radius:4px;padding:22px 24px;font-size:calc(var(--fs) * .9);line-height:1.8}
+.box h3{margin:0 0 10px;font-size:15px;font-weight:700}
+.box summary{cursor:pointer;font-weight:700;font-size:15px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.box summary::-webkit-details-marker{display:none}
+.box summary::after{content:"펼치기 +";font:700 13px/1.8 var(--f-body);color:var(--accent);flex:none}
+.box[open] summary::after{content:"접기 −"}
+.box[open] summary{margin-bottom:12px}
+.div{border:0;margin:64px auto!important;height:auto}
+.div--line{width:56px;border-top:2px solid var(--ink)}
+.div--dots{text-align:center;width:auto}.div--dots::before{content:"·  ·  ·";font-size:22px;letter-spacing:.4em;color:var(--muted)}
+.div--space{height:24px}
+figure{margin:0}
+figcaption{margin-top:10px;font-size:calc(var(--fs) * .78);line-height:1.65;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 12px}
+figcaption .cap{color:var(--ink-2);flex:1 1 100%}
+figcaption .src,figcaption .credit{font-family:var(--f-mono);font-size:12px}
+.fig-title{font-family:var(--f-head);font-weight:700;font-size:calc(var(--fs) * .95);line-height:1.5;margin:0 0 12px}
+.gal{display:grid;gap:6px}.gal-2{grid-template-columns:1fr 1fr}.gal-3{grid-template-columns:repeat(3,1fr)}.gal-4{grid-template-columns:repeat(2,1fr)}
+.gal img{width:100%;height:100%;object-fit:cover;aspect-ratio:4/3}
+.frame{position:relative;width:100%;background:var(--fig)}
+.frame iframe{display:block;width:100%;height:var(--h,500px);border:0}
+.frame--video{aspect-ratio:16/9;max-width:100%}
+.frame--video iframe{position:absolute;inset:0;height:100%}
+.frame--video.is-short{aspect-ratio:9/16;max-width:380px;margin:0 auto}
+.earth-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font:500 13px/1 var(--f-mono);padding:9px 14px;border:1px solid var(--rule);border-radius:999px;text-decoration:none;background:var(--card)}
+.earth-link:hover{border-color:var(--accent);color:var(--accent)}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:28px 32px;padding:34px 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule)}
+.stat__num{font-family:var(--f-head);font-weight:800;font-size:calc(clamp(40px,5.4vw,60px) * var(--hs));line-height:1.1;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat__num small{font-size:.42em;font-weight:700;margin-left:3px;color:var(--ink);letter-spacing:0}
+.stat__label{margin-top:8px;font-size:calc(var(--fs) * .84);line-height:1.55;color:var(--ink-2)}
+.stats__note{margin:10px 0 0;font:12px/1.5 var(--f-mono);color:var(--muted)}
+/* table */
+.tbl-wrap{overflow:auto;max-height:560px;border-top:2px solid var(--ink)}
+table.dt{width:100%;border-collapse:collapse;font-size:calc(var(--fs) * .84);line-height:1.5;font-variant-numeric:tabular-nums}
+.dt th{position:sticky;top:0;background:var(--bg);text-align:left;font-weight:700;font-size:13px;color:var(--ink-2);padding:12px 12px 10px;border-bottom:1px solid var(--ink);white-space:nowrap}
+.dt td{padding:10px 12px;border-bottom:1px solid var(--rule)}
+.dt .num{text-align:right}
+.dt tbody tr:hover td{background:var(--soft)}
+/* scrolly */
+.blk--scrolly{max-width:none;padding:0;margin-top:72px!important;margin-bottom:72px}
+.scrolly{position:relative}
+.scrolly__fig{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;background:var(--fig)}
+.scrolly__layer{position:absolute;inset:0;opacity:0;transition:opacity .7s ease}
+.scrolly__layer.is-active{opacity:1}
+.scrolly__layer img{width:100%;height:100%;object-fit:var(--fit,cover)}
+.scrolly__fig iframe{width:100%;height:100%;border:0;display:block}
+.scrolly__credit{position:absolute;right:12px;bottom:10px;font:11px/1 var(--f-mono);color:var(--muted);z-index:2}
+.scrolly__steps{position:relative;z-index:2;margin-top:-100vh;margin-top:-100svh;pointer-events:none}
+.step{min-height:100vh;display:flex;align-items:center;padding:0 var(--gut)}
+.step:first-child{min-height:70vh;align-items:flex-end;padding-bottom:20vh}
+.step:last-child{min-height:110vh}
+.al-left .step{justify-content:flex-start}.al-center .step{justify-content:center}.al-right .step{justify-content:flex-end}
+.step__card{pointer-events:auto;max-width:420px;width:100%;background:var(--card);color:var(--ink);padding:20px 24px;border-radius:3px;box-shadow:0 8px 30px rgba(0,0,0,.18);font-size:calc(var(--fs) * .95);line-height:1.8;opacity:.55;transition:opacity .3s}
+.step.is-active .step__card{opacity:1}
+.step__card p{margin:0 0 .8em}.step__card p:last-child{margin:0}
+@media (min-width:1100px){.al-left .step{padding-left:max(6vw,var(--gut))}.al-right .step{padding-right:max(6vw,var(--gut))}}
+/* footer */
+.credits{max-width:var(--col);margin:72px auto 0;padding:36px var(--gut) 80px;border-top:2px solid var(--ink);font-size:14px;line-height:1.75;color:var(--ink-2);box-sizing:content-box}
+.credits h2{font:700 13px/1 var(--f-body);color:var(--muted);margin:0 0 14px}
+.credits dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 22px;margin:0 0 28px}
+.credits dt{color:var(--muted)}.credits dd{margin:0;color:var(--ink)}
+.credits ul{margin:0 0 28px;padding-left:1.1em}
+.credits li{overflow-wrap:anywhere}
+.credits .endnote{margin:0 0 28px;color:var(--ink)}
+.credits .outlet{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+/* preview only */
+.ph{display:grid;place-items:center;text-align:center;min-height:220px;padding:24px;border:2px dashed var(--rule);border-radius:6px;color:var(--muted);font:500 14px/1.6 var(--f-mono);background:var(--soft)}
+.ph b{display:block;color:var(--ink);font-family:var(--f-body);font-size:16px;margin-bottom:4px}
+.scrolly__layer .ph{position:absolute;inset:24px;min-height:0}
+@media (max-width:760px){
+  body{font-size:calc(var(--fs) - 1px);line-height:1.85}
+  .frame iframe{height:var(--mh,var(--h,480px))}
+  .hero--split{grid-template-columns:1fr}
+  .hero--split .hero__media{min-height:56vh;order:-1}
+  .hero--split .hero__in{padding:36px var(--gut) 24px}
+  body:has(.hero--split .hero__img) .topbar{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+  .gal-3{grid-template-columns:1fr 1fr}
+  .step__card{max-width:none}
+  .byline time{margin-left:0;flex-basis:100%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+`;
+}
+
+function capHTML(b) {
+  const parts = [];
+  if (b.caption) parts.push(`<span class="cap">${mdInline(b.caption)}</span>`);
+  if (b.source) parts.push(`<span class="src">출처: ${mdInline(b.source)}</span>`);
+  if (b.credit) parts.push(`<span class="credit">${esc(b.credit)}</span>`);
+  return parts.length ? `<figcaption>${parts.join('')}</figcaption>` : '';
+}
+const ph = (title, line) => `<div class="ph"><div><b>${esc(title)}</b>${esc(line)}</div></div>`;
+function iframeTag(src, title, extra = '') {
+  return `<iframe src="${esc(src)}" title="${esc(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" ${extra}></iframe>`;
+}
+
+function renderBlock(b, P) {
+  const W = b.width || 'col';
+  const wrap = (inner, w = W) => `<div class="blk blk--${b.type} w-${w}" id="b-${esc(b.id)}">${inner}</div>`;
+  switch (b.type) {
+    case 'heading':
+      if (!b.text && !P) return '';
+      return wrap(`<h2 class="sec">${b.eyebrow ? `<span class="eyebrow">${esc(b.eyebrow)}</span>` : ''}${esc(b.text || '소제목')}</h2>`, 'col');
+    case 'text':
+      if (!String(b.text || '').trim()) return P ? wrap(ph('본문', '왼쪽에서 글을 입력하세요'), 'col') : '';
+      return wrap(`<div class="prose">${md(b.text)}</div>`, 'col');
+    case 'quote':
+      if (!b.text) return P ? wrap(ph('인용', '인용문을 입력하세요'), 'col') : '';
+      return wrap(`<blockquote class="pull"><p>${mdInline(b.text)}</p>${b.source ? `<cite>${esc(b.source)}</cite>` : ''}</blockquote>`, 'col');
+    case 'callout':
+      if (!b.text && !b.title) return '';
+      return wrap(b.collapsed
+        ? `<details class="box"><summary>${esc(b.title || '더 보기')}</summary><div class="prose">${md(b.text)}</div></details>`
+        : `<aside class="box">${b.title ? `<h3>${esc(b.title)}</h3>` : ''}<div class="prose">${md(b.text)}</div></aside>`, 'col');
+    case 'divider': return `<hr class="div div--${esc(b.style || 'line')}" id="b-${esc(b.id)}">`;
+    case 'image': {
+      const src = b.src && (b.src.startsWith('data:image/') || safeUrl(b.src));
+      if (!src) return P ? wrap(`<figure>${ph('사진', '사진을 올리면 여기에 보여요')}${capHTML(b)}</figure>`) : '';
+      return wrap(`<figure><img src="${esc(b.src)}" alt="${esc(b.alt)}" loading="lazy">${capHTML(b)}</figure>`);
+    }
+    case 'gallery': {
+      const items = (b.items || []).filter(x => x.src);
+      if (!items.length) return P ? wrap(`<figure>${ph('사진 묶음', '사진을 2~4장 올리세요')}${capHTML(b)}</figure>`) : '';
+      return wrap(`<figure><div class="gal gal-${Math.min(items.length, 4)}">${items.map(x => `<img src="${esc(x.src)}" alt="${esc(x.alt)}" loading="lazy">`).join('')}</div>${capHTML(b)}</figure>`);
+    }
+    case 'youtube': {
+      const p = parseYouTube(b.url);
+      if (!p || !p.ok) return P ? wrap(`<figure>${ph('유튜브', p ? '주소를 인식하지 못했어요' : '유튜브 주소를 넣으면 여기에 영상이 나와요')}${capHTML(b)}</figure>`) : '';
+      return wrap(`<figure><div class="frame frame--video${p.short ? ' is-short' : ''}">${iframeTag(p.embed, b.caption || 'YouTube 동영상', 'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen')}</div>${capHTML(b)}</figure>`);
+    }
+    case 'stats': {
+      const items = (b.items || []).filter(x => x.value || x.label);
+      if (!items.length) return P ? wrap(ph('숫자 강조', '숫자를 입력하세요'), 'col') : '';
+      return wrap(`<div class="stats">${items.map(x => {
+        const v = String(x.value || '').trim(); const countable = /^[\d,]+(\.\d+)?$/.test(v);
+        return `<div class="stat"><div class="stat__num"><span${countable ? ` data-count="${esc(v)}"` : ''}>${esc(v)}</span>${x.unit ? `<small>${esc(x.unit)}</small>` : ''}</div>${x.label ? `<div class="stat__label">${esc(x.label)}</div>` : ''}</div>`;
+      }).join('')}</div>${b.note ? `<p class="stats__note">${esc(b.note)}</p>` : ''}`, 'col');
+    }
+    case 'flourish': {
+      const p = parseFlourish(b.url);
+      if (!p || !p.ok) return P ? wrap(`<figure>${b.title ? `<p class="fig-title">${esc(b.title)}</p>` : ''}${ph('Flourish 시각화', p ? '주소를 인식하지 못했어요' : 'Flourish에서 게시한 주소를 넣으면 여기에 차트가 나와요')}${capHTML(b)}</figure>`) : '';
+      return wrap(`<figure>${b.title ? `<p class="fig-title">${esc(b.title)}</p>` : ''}<div class="frame" style="--h:${+b.height || 600}px;--mh:${+b.mheight || +b.height || 520}px">${iframeTag(p.embed, b.title || 'Flourish 시각화', 'scrolling="no" sandbox="allow-same-origin allow-forms allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"')}</div>${capHTML(b)}</figure>`);
+    }
+    case 'sheet': {
+      const title = b.title ? `<p class="fig-title">${esc(b.title)}</p>` : '';
+      if (b.mode === 'embed') {
+        const p = parseSheet(b.url);
+        if (!p || !p.ok) return P ? wrap(`<figure>${title}${ph('구글 시트', '시트 주소를 넣으세요')}${capHTML(b)}</figure>`) : '';
+        return wrap(`<figure>${title}<div class="frame" style="--h:${+b.height || 480}px">${iframeTag(p.embed, b.title || '구글 시트 표')}</div>${capHTML(b)}</figure>`);
+      }
+      const rows = parseTable(b.data).filter(r => r.some(c => String(c).trim()));
+      if (rows.length < 1) return P ? wrap(`<figure>${title}${ph('구글 시트 표', '[시트에서 데이터 가져오기]를 누르거나 표를 붙여넣으세요')}${capHTML(b)}</figure>`) : '';
+      const [head, ...body] = rows; const n = Math.max(...rows.map(r => r.length));
+      const numCol = [...Array(n)].map((_, j) => body.length && body.every(r => !String(r[j] ?? '').trim() || isNumCell(r[j])));
+      const cell = (c, j, tag) => `<${tag}${numCol[j] ? ' class="num"' : ''}>${esc(String(c ?? '').trim())}</${tag}>`;
+      return wrap(`<figure>${title}<div class="tbl-wrap"><table class="dt"><thead><tr>${[...Array(n)].map((_, j) => cell(head[j], j, 'th')).join('')}</tr></thead><tbody>${body.map(r => `<tr>${[...Array(n)].map((_, j) => cell(r[j], j, 'td')).join('')}</tr>`).join('')}</tbody></table></div>${capHTML(b)}</figure>`);
+    }
+    case 'earth': {
+      const src = mapEmbed(b);
+      if (!src) return P ? wrap(`<figure>${ph('구글 어스 · 지도', '구글 어스 링크나 좌표를 넣으세요')}${capHTML(b)}</figure>`) : '';
+      const lat = parseFloat(b.lat), lng = parseFloat(b.lng);
+      const link = safeUrl(b.earthUrl) || (isFinite(lat) && isFinite(lng) ? earthLink(lat, lng, parseInt(b.zoom) || 16) : '');
+      return wrap(`<figure><div class="frame" style="--h:${+b.height || 480}px">${iframeTag(src, b.label || b.caption || '지도')}</div>${link ? `<a class="earth-link" href="${esc(link)}" target="_blank" rel="noopener">구글 어스에서 3D로 보기 ↗</a>` : ''}${capHTML(b)}</figure>`);
+    }
+    case 'embed': {
+      const p = parseEmbed(b.code);
+      if (!p || !p.ok) return P ? wrap(`<figure>${ph('기타 임베드', '임베드 코드를 넣으세요')}${capHTML(b)}</figure>`) : '';
+      return wrap(`<figure><div class="frame" style="--h:${+b.height || 500}px;--mh:${+b.mheight || +b.height || 500}px">${iframeTag(p.src, b.caption || '임베드 콘텐츠', 'allowfullscreen')}</div>${capHTML(b)}</figure>`);
+    }
+    case 'scrolly': return renderScrolly(b, P);
+  }
+  return '';
+}
+function renderScrolly(b, P) {
+  const steps = (b.steps || []);
+  if (!steps.length) return '';
+  let figure = '', layerIdx = [];
+  if (b.mode === 'flourish') {
+    const p = parseFlourish(b.story);
+    if (p && p.ok) {
+      const first = Math.max(0, (parseInt(steps[0] && steps[0].slide) || 1) - 1);
+      figure = `<iframe data-story="${esc(p.embed)}" src="${esc(p.embed)}#slide-${first}" title="Flourish 스토리" sandbox="allow-same-origin allow-forms allow-scripts allow-popups" scrolling="no"></iframe>`;
+    } else if (P) figure = `<div class="scrolly__layer is-active">${ph('Flourish 스토리', 'Flourish 스토리 주소를 넣으세요')}</div>`;
+    else return '';
+  } else {
+    const layers = []; let cur = -1;
+    steps.forEach(s => { const ok = s.image && (s.image.startsWith('data:image/') || safeUrl(s.image)); if (ok) { layers.push(s.image); cur = layers.length - 1; } layerIdx.push(Math.max(cur, 0)); });
+    if (!layers.length) {
+      if (!P) layerIdx = [];
+      figure = P ? `<div class="scrolly__layer is-active">${ph('스크롤리텔링 배경', '단계마다 그림을 올리면 카드가 지나갈 때 바뀝니다')}</div>` : '';
+    } else figure = layers.map((src, i) => `<div class="scrolly__layer${i === 0 ? ' is-active' : ''}"><img src="${esc(src)}" alt="" ${i > 1 ? 'loading="lazy"' : ''}></div>`).join('');
+  }
+  const stepsHTML = steps.map((s, i) => {
+    const slide = b.mode === 'flourish' ? ` data-slide="${Math.max(0, (parseInt(s.slide) || (i + 1)) - 1)}"` : '';
+    const layer = layerIdx.length ? ` data-layer="${layerIdx[i]}"` : '';
+    return `<div class="step${i === 0 ? ' is-active' : ''}"${slide}${layer}><div class="step__card">${md(s.text) || (P ? '<p style="opacity:.6">글 카드 내용을 입력하세요</p>' : '')}</div></div>`;
+  }).join('');
+  return `<div class="blk blk--scrolly" id="b-${esc(b.id)}"><section class="scrolly al-${esc(b.align || 'left')}" style="--fit:${b.fit === 'contain' ? 'contain' : 'cover'}"><div class="scrolly__fig">${figure}${b.credit ? `<span class="scrolly__credit">${esc(b.credit)}</span>` : ''}</div><div class="scrolly__steps">${stepsHTML}</div></section></div>`;
+}
+
+function renderHero(m, P) {
+  const img = m.heroImage && (m.heroImage.startsWith('data:image/') || safeUrl(m.heroImage)) ? m.heroImage : '';
+  const style = m.heroStyle || 'overlay';
+  const kicker = m.kicker ? `<p class="hero__kicker">${esc(m.kicker)}</p>` : '';
+  const title = `<h1 class="hero__title">${esc(m.title || (P ? '기사 제목을 입력하세요' : '')).replace(/\n/g, '<br>')}</h1>`;
+  const sub = m.subtitle ? `<p class="hero__sub">${mdInline(m.subtitle).replace(/\n/g, '<br>')}</p>` : '';
+  const credit = img && m.heroCredit ? `<span class="hero__credit">${esc(m.heroCredit)}</span>` : '';
+  const imgTag = img ? `<img class="hero__img" src="${esc(img)}" alt="">` : '';
+  if (style === 'split') return `<header class="hero hero--split" id="b-meta"><div class="hero__in">${kicker}${title}${sub}</div><div class="hero__media">${imgTag || (P ? ph('표지 사진', '표지 사진을 올리세요') : '')}${credit}</div></header>`;
+  if (style === 'text') return `<header class="hero hero--text" id="b-meta"><div class="hero__in">${kicker}${title}${sub}</div>${img ? `<div class="hero__media"><img src="${esc(img)}" alt="">${credit}</div>` : ''}</header>`;
+  return `<header class="hero hero--overlay${img ? '' : ' no-img'}" id="b-meta">${imgTag}<div class="hero__in">${kicker}${title}${sub}</div>${credit}</header>`;
+}
+function renderByline(m) {
+  const as = parseAuthors(m.authors);
+  if (!as.length && !m.team && !m.date) return '';
+  return `<div class="byline">${m.team ? `<span class="team">${esc(m.team)}</span>` : ''}${as.map(a => `<span class="by">${esc(a.name)} 기자${a.email ? `<a href="mailto:${esc(a.email)}">${esc(a.email)}</a>` : ''}</span>`).join('')}${m.date ? `<time datetime="${esc(m.date)}">${fmtDate(m.date)}</time>` : ''}</div>`;
+}
+function renderEnd(m) {
+  const credits = String(m.credits || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => { const i = l.search(/[:：]/); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['', l]; });
+  const srcs = String(m.sources || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (!credits.length && !srcs.length && !m.endnote && !m.outlet) return '';
+  return `<footer class="credits" id="b-end">
+${m.endnote ? `<p class="endnote">${mdInline(m.endnote).replace(/\n/g, '<br>')}</p>` : ''}
+${credits.length ? `<h2>만든 사람들</h2><dl>${credits.map(([r, n]) => `<dt>${esc(r)}</dt><dd>${esc(n)}</dd>`).join('')}</dl>` : ''}
+${srcs.length ? `<h2>자료 출처</h2><ul>${srcs.map(s => `<li>${linkify(s)}</li>`).join('')}</ul>` : ''}
+${m.outlet ? `<p class="outlet">© ${new Date().getFullYear()} ${esc(m.outlet)}</p>` : ''}
+</footer>`;
+}
+
+/* 발행된 기사 안에서 도는 코드 (진행 막대, 스크롤리텔링, 숫자 카운트업, 링크 복사) */
+function articleRuntime() {
+  var bar = document.querySelector('.progress span');
+  function onScroll() { var d = document.documentElement, p = d.scrollTop / Math.max(1, d.scrollHeight - d.clientHeight); if (bar) bar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, p)) + ')'; }
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  var hasIO = 'IntersectionObserver' in window;
+  document.querySelectorAll('.scrolly').forEach(function (sec) {
+    var layers = sec.querySelectorAll('.scrolly__layer'), frame = sec.querySelector('iframe[data-story]'), steps = sec.querySelectorAll('.step');
+    if (!hasIO) return;
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var s = e.target;
+        steps.forEach(function (x) { x.classList.toggle('is-active', x === s); });
+        if (s.dataset.layer != null && layers.length) layers.forEach(function (l, j) { l.classList.toggle('is-active', j === +s.dataset.layer); });
+        if (frame && s.dataset.slide != null) { var u = frame.dataset.story + '#slide-' + s.dataset.slide; if (frame.src !== u) frame.src = u; }
+      });
+    }, { rootMargin: '-45% 0px -45% 0px' });
+    steps.forEach(function (s) { io.observe(s); });
+  });
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (hasIO && !reduce) {
+    var io2 = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return; io2.unobserve(e.target);
+        var el = e.target, raw = el.dataset.count, target = parseFloat(raw.replace(/,/g, '')), dec = (raw.split('.')[1] || '').length, comma = raw.indexOf(',') > -1;
+        if (isNaN(target)) return;
+        var t0 = performance.now(), dur = 1400;
+        function fmt(v) { var s = v.toFixed(dec); if (!comma) return s; var p = s.split('.'); p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ','); return p.join('.'); }
+        (function tick(now) { var k = Math.min(1, (now - t0) / dur), ease = 1 - Math.pow(1 - k, 3); el.textContent = fmt(target * ease); if (k < 1) requestAnimationFrame(tick); else el.textContent = raw; })(t0);
+      });
+    }, { threshold: 0.6 });
+    document.querySelectorAll('[data-count]').forEach(function (el) { io2.observe(el); });
+  }
+  var top = document.querySelector('.topbar'), hero = document.querySelector('.hero--overlay');
+  if (top && hero) top.classList.add('on-dark');
+  var share = document.querySelector('.share');
+  if (share) share.addEventListener('click', function () {
+    var done = function () { share.textContent = '링크 복사됨'; setTimeout(function () { share.textContent = '링크 복사'; }, 1800); };
+    if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(done, function () { window.prompt('이 주소를 복사하세요', location.href); });
+    else window.prompt('이 주소를 복사하세요', location.href);
+  });
+}
+/* 미리보기 전용: 블록 클릭 → 편집 창 이동, 스크롤 위치 기억 */
+function previewRuntime() {
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('a,button,iframe,summary,.share')) return;
+    var b = e.target.closest('[id^="b-"]'); if (b) parent.postMessage({ sk: 'pick', id: b.id.slice(2) }, '*');
+  });
+  addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (d.sk === 'goto') { var el = document.getElementById('b-' + d.id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    if (d.sk === 'restore') scrollTo(0, d.y);
+  });
+  var t; addEventListener('scroll', function () { clearTimeout(t); t = setTimeout(function () { parent.postMessage({ sk: 'scroll', y: scrollY }, '*'); }, 150); }, { passive: true });
+  parent.postMessage({ sk: 'ready' }, '*');
+}
+
+function buildArticle(s, P) {
+  const m = s.meta;
+  const title = (m.title || '제목 없음').replace(/\s+/g, ' ');
+  const desc = (m.subtitle || '').replace(/\s+/g, ' ').slice(0, 160);
+  const og = safeUrl(m.shareImage) || (safeUrl(m.heroImage) || '');
+  const body = s.blocks.map(b => renderBlock(b, P)).filter(Boolean).join('\n');
+  return `<!doctype html>
+<html lang="ko" data-theme="${isDarkBg(validHex(m.bg, '#ffffff')) ? 'dark' : 'light'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<meta property="og:type" content="article">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(desc)}">
+${og ? `<meta property="og:image" content="${esc(og)}">\n<meta name="twitter:card" content="summary_large_image">` : ''}
+<meta name="generator" content="Story Kit 스토리 기사 편집기">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="${fontLink(m)}">
+<style>${articleCSS(m)}</style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"><span></span></div>
+<div class="topbar"><span>${esc(m.outlet || '')}</span><button class="share" type="button">링크 복사</button></div>
+${renderHero(m, P)}
+${renderByline(m)}
+<main>
+${body}
+</main>
+${renderEnd(m)}
+<script>(${articleRuntime.toString()})();${P ? `(${previewRuntime.toString()})();` : ''}<\/script>
+</body>
+</html>`;
+}
+
+/* =====================================================================
+   6. 미리보기 연결
+   ===================================================================== */
+let pvTimer = null, pvScroll = 0;
+const pv = $('#pv');
+function refreshPreview() { pv.srcdoc = buildArticle(state, true); }
+function schedulePreview(now) {
+  clearTimeout(pvTimer);
+  if (!$('#pvAuto').checked && !now) return;
+  pvTimer = setTimeout(refreshPreview, now ? 0 : 650);
+}
+addEventListener('message', e => {
+  if (e.source !== pv.contentWindow) return;
+  const d = e.data || {};
+  if (d.sk === 'scroll') pvScroll = d.y;
+  if (d.sk === 'ready') pv.contentWindow.postMessage({ sk: 'restore', y: pvScroll }, '*');
+  if (d.sk === 'pick') pickCard(d.id);
+});
+pv.addEventListener('load', () => { try { pv.contentWindow.postMessage({ sk: 'restore', y: pvScroll }, '*'); } catch (e) { } });
+let lastGoto = null;
+function gotoPreview(id) {
+  if (id === lastGoto) return; lastGoto = id;
+  const target = id === 'style' ? 'meta' : id;
+  try { pv.contentWindow.postMessage({ sk: 'goto', id: target }, '*'); } catch (e) { }
+}
+function pickCard(id) {
+  pickedId = id; lastGoto = id; openCards.add(id);
+  document.querySelectorAll('.card').forEach(c => {
+    const on = c.dataset.id === id; c.classList.toggle('is-picked', on);
+    if (on) { c.classList.add('is-open'); c.querySelector('.card__toggle').setAttribute('aria-expanded', 'true'); }
+  });
+  const c = document.querySelector(`.card[data-id="${id}"]`);
+  if (innerWidth <= 960) setView('edit');
+  if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function changed(structural) {
+  if (structural) renderEditor();
+  scheduleSave(); schedulePreview(false);
+}
+
+/* =====================================================================
+   7. 위쪽 단추들 · 발행 · 도움말
+   ===================================================================== */
+function setView(v) { $('#ws').dataset.view = v; $('#tabEdit').setAttribute('aria-pressed', v === 'edit'); $('#tabPv').setAttribute('aria-pressed', v === 'preview'); if (v === 'preview') schedulePreview(true); }
+$('#tabEdit').onclick = () => setView('edit');
+$('#tabPv').onclick = () => setView('preview');
+$('#pvDesk').onclick = () => { $('#pvStage').classList.remove('is-mobile'); $('#pvDesk').setAttribute('aria-pressed', 'true'); $('#pvMob').setAttribute('aria-pressed', 'false'); };
+$('#pvMob').onclick = () => { $('#pvStage').classList.add('is-mobile'); $('#pvMob').setAttribute('aria-pressed', 'true'); $('#pvDesk').setAttribute('aria-pressed', 'false'); };
+$('#pvRefresh').onclick = () => schedulePreview(true);
+$('#pvAuto').onchange = () => { if ($('#pvAuto').checked) schedulePreview(true); };
+
+$('#bNew').onclick = () => { if (confirm('지금 기사를 지우고 빈 기사로 시작할까요?\n필요하면 먼저 [작업 파일 저장]을 하세요.')) { state = blankState(); openCards.clear(); openCards.add('meta'); pvScroll = 0; changed(true); } };
+$('#bSample').onclick = () => { if (confirm('예시 기사를 불러올까요? 지금 쓰던 내용은 사라집니다.\n필요하면 먼저 [작업 파일 저장]을 하세요.')) { state = sampleState(); openCards.clear(); openCards.add('meta'); pvScroll = 0; changed(true); } };
+$('#bSave').onclick = () => { download(`${slugify(state.meta.title)}.storykit.json`, JSON.stringify(state), 'application/json'); toast('작업 파일을 저장했어요. 다음에 [작업 파일 열기]로 이어서 쓰세요.'); };
+$('#bOpen').onclick = () => $('#fileOpen').click();
+$('#fileOpen').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { state = normalize(JSON.parse(await f.text())); openCards.clear(); openCards.add('meta'); pvScroll = 0; changed(true); toast(`'${state.meta.title || f.name}'을(를) 불러왔어요.`); }
+  catch (err) { toast('작업 파일을 읽지 못했어요. 이 편집기에서 저장한 .json 파일인지 확인하세요.'); }
+};
+
+function modal(title, nodes) {
+  const box = h('div', { class: 'modal__box', role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, h('h2', {}, title), ...nodes,
+    h('div', { class: 'acts' }, h('button', { class: 'btn', onclick: () => m.remove() }, '닫기')));
+  const m = h('div', { class: 'modal', onclick: e => { if (e.target === m) m.remove(); } }, box);
+  document.body.append(m); box.querySelector('button').focus();
+  return m;
+}
+function checkArticle() {
+  const issues = [], m = state.meta;
+  if (!m.title) issues.push('기사 제목이 비어 있어요.');
+  if (!parseAuthors(m.authors).length) issues.push('기자 이름이 없어요.');
+  if ((m.headFont === 'custom' || m.bodyFont === 'custom') && !m.fontData) issues.push('[내가 올린 글꼴]을 골랐지만 글꼴 파일이 없어 나눔고딕으로 보여요.');
+  state.blocks.forEach((b, i) => {
+    const n = `${i + 1}번째 블록(${TYPES[b.type].name})`;
+    if (b.type === 'image' && b.src && !b.alt) issues.push(`${n}: 대체 텍스트가 비어 있어요.`);
+    if (['youtube', 'flourish'].includes(b.type) && !(PARSERS[b.type](b.url) || {}).ok) issues.push(`${n}: 주소가 없거나 인식되지 않아 발행본에서 빠져요.`);
+    if (b.type === 'earth' && !mapEmbed(b)) issues.push(`${n}: 위치가 없어 발행본에서 빠져요.`);
+    if (b.type === 'sheet' && b.mode !== 'embed' && !String(b.data || '').trim()) issues.push(`${n}: 표 데이터가 비어 있어 발행본에서 빠져요.`);
+    if (b.type === 'flourish' && (parseFlourish(b.url) || {}).ok && !b.source) issues.push(`${n}: 데이터 출처를 적어 주세요.`);
+  });
+  return issues;
+}
+$('#bPublish').onclick = () => {
+  const html = buildArticle(state, false);
+  const size = new Blob([html]).size;
+  const issues = checkArticle();
+  const name = 'index.html';
+  modal('기사 발행하기', [
+    h('p', {}, `완성된 기사를 HTML 파일 한 개로 내보냅니다. 사진도 파일 안에 함께 들어가요. 파일 크기 `, h('b', {}, fmtBytes(size)), size > 15e6 ? ' · 사진이 많아 무거워요. 사진 수를 줄이거나 작은 사진을 쓰세요.' : ''),
+    issues.length ? h('div', {}, h('h3', {}, `점검 결과 ${issues.length}건`), h('ul', {}, ...issues.map(x => h('li', {}, x)))) : h('p', { class: 'note' }, '점검 결과: 빠진 항목이 없어요.'),
+    h('div', { class: 'acts' },
+      h('button', { class: 'btn btn--primary', onclick: () => { download(name, html, 'text/html'); toast('index.html 파일을 내려받았어요.'); } }, 'HTML 파일 내려받기'),
+      h('button', { class: 'btn', onclick: async e => { try { await navigator.clipboard.writeText(html); e.target.textContent = '복사됨'; } catch (err) { toast('복사하지 못했어요. 파일 내려받기를 쓰세요.'); } } }, '코드 복사')),
+    h('h3', {}, '웹에 올리는 법 1 · Netlify Drop (가장 쉬움)'),
+    h('ol', {}, h('li', {}, '바탕화면에 새 폴더를 만들고, 내려받은 index.html을 그 폴더에 넣습니다.'),
+      h('li', {}, '브라우저에서 app.netlify.com/drop 에 접속해 가입(무료)합니다.'),
+      h('li', {}, '폴더를 통째로 화면에 끌어다 놓으면 몇 초 뒤 기사 주소가 생겨요.'),
+      h('li', {}, '고친 뒤 다시 올리려면 사이트의 [Deploys] 화면에 폴더를 다시 끌어다 놓습니다.')),
+    h('h3', {}, '웹에 올리는 법 2 · GitHub Pages'),
+    h('ol', {}, h('li', {}, '새 저장소(repository)를 공개(Public)로 만들고 index.html을 올립니다.'),
+      h('li', {}, '[Settings > Pages]에서 Branch를 main으로 고르고 저장합니다.'),
+      h('li', {}, '1~2분 뒤 https://아이디.github.io/저장소이름/ 주소로 기사가 열려요.')),
+    h('p', { class: 'note' }, '유튜브·Flourish·지도는 웹에 올린 기사에서 가장 정확하게 보입니다. 작업 파일(.json)도 꼭 함께 보관하세요. 나중에 고칠 때는 작업 파일을 열어 수정한 뒤 다시 발행하면 됩니다.')
+  ]);
+};
+$('#bHelp').onclick = () => modal('도움말', [
+  h('h3', {}, '이 편집기는'),
+  h('p', {}, '왼쪽에 내용을 넣으면 오른쪽에 실제 기사 모양이 보입니다. 내용은 이 브라우저에 자동 저장되지만, 다른 컴퓨터로 옮기거나 제출하려면 [작업 파일 저장]을 하세요.'),
+  h('h3', {}, '본문 서식'),
+  h('ul', {}, h('li', {}, h('code', {}, '**굵게**'), ' · ', h('code', {}, '==형광펜=='), ' · ', h('code', {}, '*기울임*'), ' · ', h('code', {}, '[글자](https://주소)')),
+    h('li', {}, '빈 줄 = 새 문단. 줄 앞에 ', h('code', {}, '- '), '을 쓰면 목록')),
+  h('h3', {}, '주소 얻는 곳'),
+  h('ul', {},
+    h('li', {}, 'Flourish: [Export & publish] → [Publish to share and embed] → 링크 복사'),
+    h('li', {}, '구글 시트: [파일 > 공유 > 웹에 게시] → [게시] → 링크 복사'),
+    h('li', {}, '구글 어스: 웹 버전(earth.google.com)에서 장소로 이동 → 링크 아이콘 → 복사'),
+    h('li', {}, '유튜브: 영상 아래 [공유] → [복사]')),
+  h('h3', {}, '미리보기와 편집 창 오가기'),
+  h('p', {}, '미리보기에서 문단·사진을 누르면 왼쪽의 그 블록이 열려요. 블록 사이에 마우스를 올리면 나오는 + 단추로 그 자리에 블록을 끼워 넣을 수 있습니다.'),
+]);
+
+/* =====================================================================
+   8. 시작
+   ===================================================================== */
+(async function boot() {
+  let saved = null;
+  try { saved = await DB.get('current'); } catch (e) { }
+  try { state = saved ? normalize(JSON.parse(saved)) : sampleState(); } catch (e) { saved = null; state = sampleState(); }
+  $('#saveState').textContent = saved ? '이전 작업을 불러왔어요' : '예시 기사로 시작';
+  renderEditor(); refreshPreview();
+})();
+</script>
+</body>
+</html>
