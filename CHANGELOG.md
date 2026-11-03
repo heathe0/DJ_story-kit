@@ -4,6 +4,13 @@ Version numbers follow `0.minor.patch`; unless a version is specified, bump by 0
 
 버전 번호는 `0.주.보조` 형식이며, 따로 지정하지 않으면 0.01 단위로 올립니다(0.80 → 0.81). 저장소에 올릴 때마다 `VERSION`, 이 파일, 편집기(`index.html`)의 버전 표시를 함께 올리고 `v버전` 태그를 붙입니다. 1.0은 정식 배포 이후에만 씁니다.
 
+## 0.82 (2026-11-03)
+
+- The editor file is renamed from `index.html` to `template.html`. With GitHub Pages the editor now opens at `https://heathe0.github.io/DJ_story-kit/template.html`.
+- 편집기 파일 이름을 `index.html`에서 `template.html`로 바꿨습니다. GitHub Pages에서는 `https://heathe0.github.io/DJ_story-kit/template.html` 에서 열립니다.
+- Web addresses and email addresses typed anywhere in an article (body, captions, credits, sources, quotes, notes) are now clickable links; email addresses open a new message.
+- 기사 안 어디에 쓰든(본문, 설명, 크레딧, 출처, 인용, 각주) 웹 주소는 클릭되는 링크가 되고, 이메일 주소는 메일 보내기 링크가 됩니다.
+
 ## 0.81 (2026-11-03)
 
 - Google Earth · Map block accepts Google Earth project (slide) links (`earth.google.com/web/data=…`) and shows them as a button card that opens the slides in a new window.

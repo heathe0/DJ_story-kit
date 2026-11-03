@@ -3,7 +3,7 @@ title: Story Article Editor User Manual
 lang: en
 ---
 
-**Story Kit version 0.81** · 한국어 매뉴얼: `사용매뉴얼.md` / `사용매뉴얼.docx`
+**Story Kit version 0.82** · 한국어 매뉴얼: `사용매뉴얼.md` / `사용매뉴얼.docx`
 
 A user manual for a web editor that helps data-journalism students and instructors build interactive articles with photos, Flourish charts, Google Sheets tables, Google Earth maps, YouTube videos and scrollytelling. There is nothing to install and no account to create: open one file in Chrome or Edge, and export the finished article as a single HTML file to put on the web.
 
@@ -14,9 +14,9 @@ A user manual for a web editor that helps data-journalism students and instructo
 
 # 1. Getting started
 
-The editor is a single file, `index.html`. No installation or sign-up. Open it in Chrome or Edge and start.
+The editor is a single file, `template.html`. No installation or sign-up. Open it in Chrome or Edge and start.
 
-1. Download `index.html` to your computer.
+1. Download `template.html` to your computer.
 2. Drag the file into a Chrome window, or double-click it.
 3. The first time you open it, an **example article** is loaded. All numbers and place names are made-up practice data. Edit or delete them one by one to turn it into your own story.
 4. To start from scratch, press **New article** in the top bar. Press **Load example** whenever you want the example back.
@@ -123,6 +123,7 @@ You can use the buttons above the text field or type the symbols yourself.
 | `[text](https://address)` | a link |
 | One blank line | new paragraph |
 | `- ` at the start of a line | list |
+| `https://…` or `name@example.com` typed anywhere | clickable link / mailto link (automatic) |
 
 ## Photos
 
@@ -208,7 +209,7 @@ Most services that give you `<iframe …>` code, such as Datawrapper charts, Goo
 
 # 5. Saving and publishing
 
-There are two kinds of files. The **work file (.json)** is the original you use to keep editing, and the **published file (index.html)** is the finished version readers see. Keep both.
+There are two kinds of files. The **work file (.json)** is the original you use to keep editing, and the **published file (`index.html`)** is the finished version readers see. Keep both.
 
 | File | Button that makes it | Use |
 |---|---|---|
@@ -277,9 +278,9 @@ Press **Publish** and the check results appear first. It tells you about a missi
 
 ## Distributing the editor
 
-The editor is one `index.html` file. Put it on the web and students can open it with a single address, and you can roll out fixes in one go.
+The editor is one `template.html` file. Put it on the web and students can open it with a single address, and you can roll out fixes in one go.
 
-1. Put `index.html` in a folder and drag it onto `app.netlify.com/drop`. (GitHub Pages works too. See Ch. 5.)
+1. Put `template.html` in a folder, renamed to `index.html` so it opens at the bare address, and drag it onto `app.netlify.com/drop`. (GitHub Pages works too. See Ch. 5.)
 2. Share the resulting address with students.
 3. To re-upload after changing the editor, drag the folder onto the same site's Deploys screen and the address stays the same.
 
