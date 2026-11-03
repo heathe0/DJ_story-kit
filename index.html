@@ -173,7 +173,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 <body>
 
 <header class="top">
-  <div class="brand"><b>스토리 기사 편집기</b><small>Story Kit · 데이터 스토리텔링 실습</small></div>
+  <div class="brand"><b>스토리 기사 편집기</b><small>Story Kit v0.8 · 데이터 스토리텔링 실습</small></div>
   <span class="save-state" id="saveState">불러오는 중…</span>
   <div class="seg mob-tabs" role="group" aria-label="화면 전환">
     <button id="tabEdit" aria-pressed="true">편집</button><button id="tabPv" aria-pressed="false">미리보기</button>
@@ -209,6 +209,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 /* =====================================================================
    0. 작은 도구들
    ===================================================================== */
+const VERSION = '0.8';
 const $ = (s, r = document) => r.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1346,7 +1347,7 @@ function buildArticle(s, P) {
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
 ${og ? `<meta property="og:image" content="${esc(og)}">\n<meta name="twitter:card" content="summary_large_image">` : ''}
-<meta name="generator" content="Story Kit 스토리 기사 편집기">
+<meta name="generator" content="Story Kit ${VERSION}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${fontLink(m)}">
 <style>${articleCSS(m)}</style>
@@ -1419,7 +1420,7 @@ $('#pvAuto').onchange = () => { if ($('#pvAuto').checked) schedulePreview(true);
 
 $('#bNew').onclick = () => { if (confirm('지금 기사를 지우고 빈 기사로 시작할까요?\n필요하면 먼저 [작업 파일 저장]을 하세요.')) { state = blankState(); openCards.clear(); openCards.add('meta'); pvScroll = 0; changed(true); } };
 $('#bSample').onclick = () => { if (confirm('예시 기사를 불러올까요? 지금 쓰던 내용은 사라집니다.\n필요하면 먼저 [작업 파일 저장]을 하세요.')) { state = sampleState(); openCards.clear(); openCards.add('meta'); pvScroll = 0; changed(true); } };
-$('#bSave').onclick = () => { download(`${slugify(state.meta.title)}.storykit.json`, JSON.stringify(state), 'application/json'); toast('작업 파일을 저장했어요. 다음에 [작업 파일 열기]로 이어서 쓰세요.'); };
+$('#bSave').onclick = () => { download(`${slugify(state.meta.title)}.storykit.json`, JSON.stringify({ ...state, app: 'story-kit', appVersion: VERSION }), 'application/json'); toast('작업 파일을 저장했어요. 다음에 [작업 파일 열기]로 이어서 쓰세요.'); };
 $('#bOpen').onclick = () => $('#fileOpen').click();
 $('#fileOpen').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -1473,7 +1474,7 @@ $('#bPublish').onclick = () => {
   ]);
 };
 $('#bHelp').onclick = () => modal('도움말', [
-  h('h3', {}, '이 편집기는'),
+  h('h3', {}, `이 편집기는 (Story Kit v${VERSION})`),
   h('p', {}, '왼쪽에 내용을 넣으면 오른쪽에 실제 기사 모양이 보입니다. 내용은 이 브라우저에 자동 저장되지만, 다른 컴퓨터로 옮기거나 제출하려면 [작업 파일 저장]을 하세요.'),
   h('h3', {}, '본문 서식'),
   h('ul', {}, h('li', {}, h('code', {}, '**굵게**'), ' · ', h('code', {}, '==형광펜=='), ' · ', h('code', {}, '*기울임*'), ' · ', h('code', {}, '[글자](https://주소)')),
