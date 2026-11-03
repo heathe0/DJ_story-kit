@@ -1,6 +1,6 @@
 # DJ_story-kit
 
-Current version: **0.8** ([Changelog](CHANGELOG.md)) · 현재 버전: **0.8** ([변경 이력](CHANGELOG.md))
+Current version: **0.81** ([Changelog](CHANGELOG.md)) · 현재 버전: **0.81** ([변경 이력](CHANGELOG.md))
 
 English · [한국어](#한국어)
 

@@ -4,6 +4,11 @@ Version numbers follow `0.minor.patch`; unless a version is specified, bump by 0
 
 버전 번호는 `0.주.보조` 형식이며, 따로 지정하지 않으면 0.01 단위로 올립니다(0.80 → 0.81). 저장소에 올릴 때마다 `VERSION`, 이 파일, 편집기(`index.html`)의 버전 표시를 함께 올리고 `v버전` 태그를 붙입니다. 1.0은 정식 배포 이후에만 씁니다.
 
+## 0.81 (2026-11-03)
+
+- Google Earth · Map block accepts Google Earth project (slide) links (`earth.google.com/web/data=…`) and shows them as a button card that opens the slides in a new window.
+- 구글 어스 · 지도 블록이 구글 어스 프로젝트(슬라이드) 링크(`earth.google.com/web/data=…`)를 받아, 새 창에서 슬라이드가 열리는 단추 카드로 보여 줍니다.
+
 ## 0.8 (2026-11-03)
 
 First public version, in English and Korean. · 첫 공개 버전(영어·국문).

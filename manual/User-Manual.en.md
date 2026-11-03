@@ -3,7 +3,7 @@ title: Story Article Editor User Manual
 lang: en
 ---
 
-**Story Kit version 0.8** · 한국어 매뉴얼: `사용매뉴얼.md` / `사용매뉴얼.docx`
+**Story Kit version 0.81** · 한국어 매뉴얼: `사용매뉴얼.md` / `사용매뉴얼.docx`
 
 A user manual for a web editor that helps data-journalism students and instructors build interactive articles with photos, Flourish charts, Google Sheets tables, Google Earth maps, YouTube videos and scrollytelling. There is nothing to install and no account to create: open one file in Chrome or Edge, and export the finished article as a single HTML file to put on the web.
 
@@ -187,6 +187,7 @@ Google Earth for web is blocked from being embedded directly in other sites. So 
 
 - A Google Maps address, or just coordinates like `37.5665, 126.9780`, also works.
 - If you paste the code from Google Maps **Share > Embed a map**, that map is embedded as is.
+- **Google Earth project (slide) links**: a link like `earth.google.com/web/data=…` has no coordinates and can't be embedded. Paste it anyway and the block becomes a **button card** ("View the slides in Google Earth ↗") that opens the project in a new window. You can set the card title and a description. To show the slides' flow inside the article, record them as a video and use a YouTube block, or capture each scene and use scrollytelling.
 - For flight videos made with Google Earth Studio, upload them to YouTube and use a **YouTube block**.
 
 ## YouTube

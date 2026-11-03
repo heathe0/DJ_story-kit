@@ -211,7 +211,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 /* =====================================================================
    0. 작은 도구들
    ===================================================================== */
-const VERSION = '0.8';
+const VERSION = '0.81';
 /* ---- i18n: English (first) and Korean ---- */
 let UI = 'en';
 try { const sv = localStorage.getItem('storykit-lang'); UI = sv === 'ko' || sv === 'en' ? sv : (/^ko/i.test(navigator.language || '') ? 'ko' : 'en'); } catch (e) { }
@@ -220,6 +220,12 @@ const EN = {};                      /* Korean source string -> English; filled b
 const $t = ko => (CUR === 'en' && Object.prototype.hasOwnProperty.call(EN, ko)) ? EN[ko] : ko;
 const $tf = (ko, ...a) => $t(ko).replace(/\{(\d+)\}/g, (_, i) => a[+i]);
 Object.assign(EN, {
+"인식됨 · 구글 어스 프로젝트(슬라이드) 링크. 기사 안에 직접 넣을 수 없어 단추 카드로 들어가요": "Recognized · Google Earth project (slide) link. It can't be embedded in the article, so it appears as a button card",
+"구글 어스 웹은 다른 사이트 안에 직접 넣을 수 없어요. 그래서 같은 위치의 위성 지도를 넣고, 아래에 [구글 어스에서 3D로 보기] 단추를 달아 줍니다. 구글 어스 프로젝트(슬라이드) 링크는 위치 없이 [슬라이드 보기] 단추 카드로 들어갑니다.": "Google Earth for web can't be embedded directly in another site. So a satellite map of the same place is embedded, with a [View in 3D on Google Earth] button below it. A Google Earth project (slide) link needs no location: it becomes a [View the slides] button card.",
+"카드 제목 (선택)": "Card title (optional)",
+"구글 어스 프로젝트": "Google Earth project",
+"구글 어스에서 슬라이드 보기": "View the slides in Google Earth",
+"\" target=\"_blank\" rel=\"noopener\"><span class=\"earth-card__k\">Google Earth</span>": "\" target=\"_blank\" rel=\"noopener\"><span class=\"earth-card__k\">Google Earth</span>",
 "링크 복사": "Copy link",
 "펼치기": "Expand",
 "접기": "Collapse",
@@ -325,7 +331,6 @@ Object.assign(EN, {
 "구글 어스 · 지도": "Google Earth · Map",
 "위성 지도와 3D 보기 단추": "Satellite map plus a 3D view button",
 "구글 어스·구글 지도 주소, 또는 좌표": "Google Earth / Google Maps address, or coordinates",
-"구글 어스 웹은 다른 사이트 안에 직접 넣을 수 없어요. 그래서 같은 위치의 위성 지도를 넣고, 아래에 [구글 어스에서 3D로 보기] 단추를 달아 줍니다.": "Google Earth for web can't be embedded directly in another site. So a satellite map of the same place is embedded, with a [View in 3D on Google Earth] button below it.",
 "위도": "Latitude",
 "경도": "Longitude",
 "확대(3~20)": "Zoom (3–20)",
@@ -705,6 +710,8 @@ function parseEarth(u) {
   u = String(u || '').trim(); if (!u) return null;
   const src = srcFromCode(u);
   if (src && /google\.[^/]+\/maps\/embed/.test(src)) return { ok: true, rawEmbed: src, msg: $t('인식됨 · 구글 지도 [지도 퍼가기] 코드') };
+  const proj = u.match(/https:\/\/earth\.google\.com\/web\/[^\s"'<>]*data=[^\s"'<>]+/);
+  if (proj && !/@-?\d/.test(proj[0])) return { ok: true, project: proj[0], msg: $t('인식됨 · 구글 어스 프로젝트(슬라이드) 링크. 기사 안에 직접 넣을 수 없어 단추 카드로 들어가요') };
   const ll = u.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
   if (ll) return { ok: true, lat: +ll[1], lng: +ll[2], zoom: null, earth: null, msg: `${$t("인식됨 · 위도 ")}${(+ll[1]).toFixed(5)}${$t(", 경도 ")}${(+ll[2]).toFixed(5)}` };
   const m = u.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,([^/?#]*))?/);
@@ -846,13 +853,14 @@ const TYPES = {
     { ...heightF(480), show: b => b.mode === 'embed' }, widthF('col')] },
   earth: { name: $t('구글 어스 · 지도'), g: $t('데이터'), desc: $t('위성 지도와 3D 보기 단추'), fields: [
     { k: 'url', label: $t('구글 어스·구글 지도 주소, 또는 좌표'), t: 'url', parse: 'earth', ph: 'https://earth.google.com/web/@37.5665,126.9780,…',
-      hint: $t('구글 어스 웹은 다른 사이트 안에 직접 넣을 수 없어요. 그래서 같은 위치의 위성 지도를 넣고, 아래에 [구글 어스에서 3D로 보기] 단추를 달아 줍니다.') },
-    { k: 'lat', label: $t('위도'), t: 'text', third: true }, { k: 'lng', label: $t('경도'), t: 'text', third: true },
-    { k: 'zoom', label: $t('확대(3~20)'), t: 'number', def: 16, third: true },
-    { k: 'maptype', label: $t('지도 종류'), t: 'select', half: true, options: [['sat', $t('위성')], ['hybrid', $t('위성 + 지명')], ['map', $t('일반 지도')]] },
-    heightF(480),
-    { k: 'pin', label: $t('위치에 핀 꽂기'), t: 'check' },
-    { k: 'label', label: $t('핀 이름 (선택)'), t: 'text', show: b => b.pin },
+      hint: $t('구글 어스 웹은 다른 사이트 안에 직접 넣을 수 없어요. 그래서 같은 위치의 위성 지도를 넣고, 아래에 [구글 어스에서 3D로 보기] 단추를 달아 줍니다. 구글 어스 프로젝트(슬라이드) 링크는 위치 없이 [슬라이드 보기] 단추 카드로 들어갑니다.') },
+    { k: 'title', label: $t('카드 제목 (선택)'), t: 'text', show: b => b.projectUrl },
+    { k: 'lat', label: $t('위도'), t: 'text', third: true, show: b => !b.projectUrl }, { k: 'lng', label: $t('경도'), t: 'text', third: true, show: b => !b.projectUrl },
+    { k: 'zoom', label: $t('확대(3~20)'), t: 'number', def: 16, third: true, show: b => !b.projectUrl },
+    { k: 'maptype', label: $t('지도 종류'), t: 'select', half: true, show: b => !b.projectUrl, options: [['sat', $t('위성')], ['hybrid', $t('위성 + 지명')], ['map', $t('일반 지도')]] },
+    { ...heightF(480), show: b => !b.projectUrl },
+    { k: 'pin', label: $t('위치에 핀 꽂기'), t: 'check', show: b => !b.projectUrl },
+    { k: 'label', label: $t('핀 이름 (선택)'), t: 'text', show: b => b.pin && !b.projectUrl },
     { k: 'caption', label: $t('설명'), t: 'textarea', rows: 2 }, widthF('wide')] },
 
   scrolly: { name: $t('스크롤리텔링'), g: $t('인터랙티브'), desc: $t('그림은 고정, 글 카드가 지나가며 장면 전환'), fields: [
@@ -1056,7 +1064,7 @@ function fixedCard(id, label, summaryFn, fields, obj) {
 function blockSummary(b) {
   const pick = { heading: b.text, text: b.text, quote: b.text, callout: b.title, image: b.caption || (b.src ? $t('사진 있음') : $t('사진 없음')),
     gallery: $tf('{0}장', (b.items || []).filter(x => x.src).length), youtube: b.url, stats: (b.items || []).map(x => x.value + (x.unit || '')).join(' · '),
-    flourish: b.title || b.url, sheet: b.title || b.url, earth: b.label || b.caption || (b.lat ? `${b.lat}, ${b.lng}` : ''), scrolly: $tf('{0}단계', (b.steps || []).length),
+    flourish: b.title || b.url, sheet: b.title || b.url, earth: b.title || b.label || b.caption || (b.lat ? `${b.lat}, ${b.lng}` : ''), scrolly: $tf('{0}단계', (b.steps || []).length),
     embed: b.caption || b.code, divider: { line: $t('짧은 선'), dots: $t('점 세 개'), space: $t('여백') }[b.style] }[b.type];
   return String(pick || '').replace(/\s+/g, ' ').slice(0, 80) || $t('(비어 있음)');
 }
@@ -1207,6 +1215,7 @@ function urlField(f, obj, block, card, container, fields, set, label, hint, id) 
     const p = show();
     if (f.parse === 'earth' && p && p.ok) {
       obj._earth = p.rawEmbed ? { rawEmbed: p.rawEmbed } : null;
+      obj.projectUrl = p.project || '';
       if (p.lat != null) { obj.lat = String(p.lat); obj.lng = String(p.lng); if (p.zoom) obj.zoom = p.zoom; obj.earthUrl = p.earth || ''; }
       obj[f.k] = input.value; renderFields(container, fields, obj, block, card);
       const again = container.querySelector('input[type=url]'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
@@ -1471,6 +1480,11 @@ figcaption .src,figcaption .credit{font-family:var(--f-mono);font-size:12px}
 .frame--video iframe{position:absolute;inset:0;height:100%}
 .frame--video.is-short{aspect-ratio:9/16;max-width:380px;margin:0 auto}
 .earth-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font:500 13px/1 var(--f-mono);padding:9px 14px;border:1px solid var(--rule);border-radius:999px;text-decoration:none;background:var(--card)}
+.earth-card{display:flex;flex-direction:column;gap:8px;padding:22px 24px;border:1px solid var(--rule);border-radius:14px;text-decoration:none;background:var(--accent-soft)}
+.earth-card:hover{border-color:var(--accent)}
+.earth-card__k{font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.earth-card b{font-size:1.25em;line-height:1.4}
+.earth-card__go{font:600 14px/1 var(--f-body);color:var(--accent)}
 .earth-link:hover{border-color:var(--accent);color:var(--accent)}
 /* stats */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:28px 32px;padding:34px 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule)}
@@ -1605,6 +1619,8 @@ function renderBlock(b, P) {
       return wrap(`<figure>${title}<div class="tbl-wrap"><table class="dt"><thead><tr>${[...Array(n)].map((_, j) => cell(head[j], j, 'th')).join('')}</tr></thead><tbody>${body.map(r => `<tr>${[...Array(n)].map((_, j) => cell(r[j], j, 'td')).join('')}</tr>`).join('')}</tbody></table></div>${capHTML(b)}</figure>`);
     }
     case 'earth': {
+      const proj = /^https:\/\/earth\.google\.com\//.test(b.projectUrl || '') ? safeUrl(b.projectUrl) : '';
+      if (proj) return wrap(`<figure><a class="earth-card" href="${esc(proj)}${$t("\" target=\"_blank\" rel=\"noopener\"><span class=\"earth-card__k\">Google Earth</span>")}<b>${esc(b.title || $t('구글 어스 프로젝트'))}</b><span class="earth-card__go">${$t('구글 어스에서 슬라이드 보기')} ↗</span></a>${capHTML(b)}</figure>`);
       const src = mapEmbed(b);
       if (!src) return P ? wrap(`<figure>${ph($t('구글 어스 · 지도'), $t('구글 어스 링크나 좌표를 넣으세요'))}${capHTML(b)}</figure>`) : '';
       const lat = parseFloat(b.lat), lng = parseFloat(b.lng);
@@ -1853,7 +1869,7 @@ function checkArticle() {
     const n = $tf('{0}번째 블록({1})', i + 1, TYPES[b.type].name);
     if (b.type === 'image' && b.src && !b.alt) issues.push(`${n}${$t(": 대체 텍스트가 비어 있어요.")}`);
     if (['youtube', 'flourish'].includes(b.type) && !(PARSERS[b.type](b.url) || {}).ok) issues.push(`${n}${$t(": 주소가 없거나 인식되지 않아 발행본에서 빠져요.")}`);
-    if (b.type === 'earth' && !mapEmbed(b)) issues.push(`${n}${$t(": 위치가 없어 발행본에서 빠져요.")}`);
+    if (b.type === 'earth' && !mapEmbed(b) && !b.projectUrl) issues.push(`${n}${$t(": 위치가 없어 발행본에서 빠져요.")}`);
     if (b.type === 'sheet' && b.mode !== 'embed' && !String(b.data || '').trim()) issues.push(`${n}${$t(": 표 데이터가 비어 있어 발행본에서 빠져요.")}`);
     if (b.type === 'flourish' && (parseFlourish(b.url) || {}).ok && !b.source) issues.push(`${n}${$t(": 데이터 출처를 적어 주세요.")}`);
   });
